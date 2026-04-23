@@ -70,3 +70,4 @@ Healthcheck endpoint beschikbaar via [http://localhost:8080/actuator/health](htt
 - `src/main/resources/application.properties` - configuratie
 - `src/test/java` - tests
 - `dockercompose.yml` - lokale infra (Postgres, RabbitMQ)
+
