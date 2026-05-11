@@ -1,0 +1,15 @@
+Deliverables sprint 3
+1. Failure Mode & Effect Analysis (FMEA) Jullie brengen per component systematisch in kaart wat er mis kan gaan, wat het gevolg is, en welke maatregel is genomen om de kans of impact te verkleinen. Bij de opdracht is de severity-score niet vereist — focus op failure mode, effect, oorzaak en maatregel.
+
+2. Aantoonbare resiliency in de implementatie De maatregelen uit de FMEA zijn herkenbaar terug te vinden in de code en aan te wijzen in de architectuur.
+
+
+3. Observability dashboard Een werkend real-time dashboard waarop OpenMRS-beheerders de volgende zaken kunnen volgen: de status van verstuurde en mislukte berichten, de throughput en actieve foutmeldingen of circuit breaker-activiteit. 
+
+4. Performancerapportage Een beknopte rapportage die aantoont hoe de module zich gedraagt onder belasting — hoeveel berichten per tijdseenheid verwerkt worden, wat de latency is bij provider-aanroepen, en wat er aantoonbaar verbeterd is ten opzichte van een eerdere versie of meting. Dit is de onderbouwing voor het rubricumcriterium betrouwbaarheid.
+
+5. C4-diagram level 3 Het componentdiagram dat de interne structuur van de notificatieworker gedetailleerd weergeeft: welke klassen of services verantwoordelijk zijn voor scheduling, provider-selectie, retry-logica en logging.
+
+6. Testrapportage Unit-tests die de kernlogica valideren (scheduler, provider-adapter, idempotentie) en geautomatiseerde integratietests waarmee de werking lokaal kan worden aangetoond. 
+
+7. Technische documentatie voor beheerders Een beschrijving voor OpenMRS-beheerders van welke stappen nodig zijn om de koppeling te realiseren, inclusief configuratie van credentials, de Docker-opstartinstructie en het voorbeeldrequest.

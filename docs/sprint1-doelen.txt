@@ -1,0 +1,26 @@
+Deliverables sprint 1
+1. Systeemvisualisatie
+Er is een visualisatie van de OpenMRS-omgeving waarop de geïdentificeerde integratiepunten zichtbaar zijn en besproken zijn binnen de groep.
+
+ADR 1 — Architectuurkeuze: zelfstandige module vs. ingebouwde module
+Jullie leggen vast hoe de communicatiemodule gepositioneerd wordt ten opzichte van OpenMRS, met een onderbouwde keuze en expliciete argumentatie waarom de alternatieven zijn afgevallen.
+
+ADR 2 — Technologie stack
+Jullie leggen vast met welke taal, framework, berichtenwachtrij, opslag en monitoringtooling de module gebouwd wordt. Per keuze beargumenteren jullie waarom deze technologie past bij de eisen van de opdracht én bij de capaciteiten van het team.
+
+ADR 3 — Integratiemethode: hoe koppelt de module aan OpenMRS?
+Jullie onderzoeken via welk mechanisme de communicatiemodule afspraakdata ontvangt van OpenMRS. Er zijn meerdere oplossingen denkbaar. Denk hierbij ook na over de gevolgen voor iedere optie bij downtime, over schaalbaarheid naar meerdere OpenMRS-instanties, en over de aansluiting op de HL7/FHIR-standaard. Onderzoek  hoe je data uit het OpenMRS systeem in de communicatiemodule krijgt.
+
+Samenwerking en projectmanagement
+Een communicatiemodule bouwen doe je niet alleen — en sprint 1 is het moment om daar goede afspraken over te maken voordat de eerste regel code geschreven wordt.
+
+Denk als team na over de volgende vragen:
+
+Hoe verdelen jullie het werk? De module heeft herkenbare lagen — scheduling, provider-adapters, HL7-verwerking, monitoring. Welke teamleden zijn verantwoordelijk voor welke lagen, en hoe voorkom je dat iedereen in dezelfde bestanden werkt?
+Hoe gaan jullie samenwerken in code? Denk aan een branching-strategie (bijv. feature branches per userstory), afspraken over pull requests en code reviews, en naamgeving van branches en commits.
+Hoe volgen jullie de voortgang bij? Gebruik je een bord (Scrum-bord, Kanban), en wie bewaakt dat taken niet blijven hangen?
+Wat doe je als een teamlid vastloopt? Spreek een norm af — bijvoorbeeld dat je maximaal een dagdeel zelfstandig probeert voordat je de groep inschakelt.
+Hoe documenteer je beslissingen die niet in een ADR passen, zoals kleine technische keuzes tijdens het bouwen?
+Het is niet erg als deze afspraken in sprint 2 bijgesteld worden — maar ze moeten er aan het einde van sprint 1 wél liggen.
+
+Zorg dat al deze afspraken helder vastgelegd zijn in een document. Ieder teamlid commit zichzelf hieraan door zijn handtekening onder het document te zetten.
