@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   postgres:
     image: postgres:15-alpine
@@ -39,23 +38,36 @@ services:
       - comm-network
 
   openmrs:
-    image: openmrs/openmrs-core:2.5.15-amazoncorretto-11
+    build:
+      context: ./docker/openmrs
+      dockerfile: Dockerfile
+    # Lokale tag; niet op Docker Hub — voorkomt pull-fout zonder --build
+    image: openmrs-comm-fhir:2.7.9
+    pull_policy: build
     container_name: openmrs-server
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: openmrs
-      DB_USERNAME: openmrs_user
-      DB_PASSWORD: openmrs_password
-      DB_CREATE_TABLES: "true"
-      DB_AUTO_UPDATE: "true"
+      OMRS_DB: postgresql
+      OMRS_DB_HOSTNAME: postgres
+      OMRS_DB_PORT: 5432
+      OMRS_DB_NAME: openmrs
+      OMRS_DB_USERNAME: openmrs_user
+      OMRS_DB_PASSWORD: openmrs_password
+      OMRS_CREATE_TABLES: "true"
+      OMRS_AUTO_UPDATE_DATABASE: "true"
+      OMRS_ADMIN_USER_PASSWORD: Admin123
     ports:
       - "8080:8080"
     volumes:
       - openmrs_data:/openmrs/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/openmrs/health/alive"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 300s
     networks:
       - comm-network
 
@@ -70,7 +82,7 @@ services:
       rabbitmq:
         condition: service_healthy
       openmrs:
-        condition: service_started
+        condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/openmrs
       SPRING_DATASOURCE_USERNAME: openmrs_user
@@ -79,6 +91,7 @@ services:
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: commuser
       SPRING_RABBITMQ_PASSWORD: commpassword
+      # Basis-URL; FHIR R4: /ws/fhir2/R4 (bv. Appointment)
       OPENMRS_URL: http://openmrs:8080/openmrs
     ports:
       - "8081:8080"
