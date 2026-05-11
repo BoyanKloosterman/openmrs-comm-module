@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: comm-module-db
+    environment:
+      POSTGRES_DB: openmrs
+      POSTGRES_USER: openmrs_user
+      POSTGRES_PASSWORD: openmrs_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openmrs_user -d openmrs"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - comm-network
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: comm-module-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: commuser
+      RABBITMQ_DEFAULT_PASS: commpassword
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI port
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - comm-network
+
+  openmrs:
+    image: openmrs/openmrs-core:latest
+    container_name: openmrs-server
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: openmrs
+      DB_USERNAME: openmrs_user
+      DB_PASSWORD: openmrs_password
+      DB_CREATE_TABLES: "true"
+      DB_AUTO_UPDATE: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - openmrs_data:/openmrs/data
+    networks:
+      - comm-network
+
+  comm-module:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: comm-module-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      openmrs:
+        condition: service_started
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/openmrs
+      SPRING_DATASOURCE_USERNAME: openmrs_user
+      SPRING_DATASOURCE_PASSWORD: openmrs_password
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: commuser
+      SPRING_RABBITMQ_PASSWORD: commpassword
+      OPENMRS_URL: http://openmrs:8080/openmrs
+    ports:
+      - "8081:8080"
+    networks:
+      - comm-network
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  openmrs_data:
+
+networks:
+  comm-network:
+    driver: bridge
