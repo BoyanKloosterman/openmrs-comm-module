@@ -3,15 +3,15 @@ services:
     image: postgres:15-alpine
     container_name: comm-module-db
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-openmrs}
-      POSTGRES_USER: ${POSTGRES_USER:-openmrs_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openmrs_password}
+      POSTGRES_DB: ${POSTGRES_DB:?Zie .env.example}
+      POSTGRES_USER: ${POSTGRES_USER:?Zie .env.example}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Zie .env.example}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-openmrs_user} -d ${POSTGRES_DB:-openmrs}"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -22,8 +22,8 @@ services:
     image: rabbitmq:3.12-management-alpine
     container_name: comm-module-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-commuser}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-commpassword}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:?Zie .env.example}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?Zie .env.example}
     ports:
       - "5672:5672"    # AMQP port
       - "15672:15672"  # Management UI port
@@ -52,12 +52,12 @@ services:
       OMRS_DB: postgresql
       OMRS_DB_HOSTNAME: postgres
       OMRS_DB_PORT: 5432
-      OMRS_DB_NAME: ${POSTGRES_DB:-openmrs}
-      OMRS_DB_USERNAME: ${POSTGRES_USER:-openmrs_user}
-      OMRS_DB_PASSWORD: ${POSTGRES_PASSWORD:-openmrs_password}
+      OMRS_DB_NAME: ${POSTGRES_DB:?Zie .env.example}
+      OMRS_DB_USERNAME: ${POSTGRES_USER:?Zie .env.example}
+      OMRS_DB_PASSWORD: ${POSTGRES_PASSWORD:?Zie .env.example}
       OMRS_CREATE_TABLES: "true"
       OMRS_AUTO_UPDATE_DATABASE: "true"
-      OMRS_ADMIN_USER_PASSWORD: ${OMRS_ADMIN_USER_PASSWORD:-Admin123}
+      OMRS_ADMIN_USER_PASSWORD: ${OMRS_ADMIN_USER_PASSWORD:?Zie .env.example}
     ports:
       - "8080:8080"
     volumes:
@@ -84,15 +84,15 @@ services:
       openmrs:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/openmrs}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-openmrs_user}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-openmrs_password}
-      SPRING_RABBITMQ_HOST: ${SPRING_RABBITMQ_HOST:-rabbitmq}
-      SPRING_RABBITMQ_PORT: ${SPRING_RABBITMQ_PORT:-5672}
-      SPRING_RABBITMQ_USERNAME: ${SPRING_RABBITMQ_USERNAME:-commuser}
-      SPRING_RABBITMQ_PASSWORD: ${SPRING_RABBITMQ_PASSWORD:-commpassword}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?Zie .env.example}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?Zie .env.example}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?Zie .env.example}
+      SPRING_RABBITMQ_HOST: ${SPRING_RABBITMQ_HOST:?Zie .env.example}
+      SPRING_RABBITMQ_PORT: ${SPRING_RABBITMQ_PORT:?Zie .env.example}
+      SPRING_RABBITMQ_USERNAME: ${SPRING_RABBITMQ_USERNAME:?Zie .env.example}
+      SPRING_RABBITMQ_PASSWORD: ${SPRING_RABBITMQ_PASSWORD:?Zie .env.example}
       # Basis-URL; FHIR R4: /ws/fhir2/R4 (bv. Appointment)
-      OPENMRS_URL: ${OPENMRS_URL:-http://openmrs:8080/openmrs}
+      OPENMRS_URL: ${OPENMRS_URL:?Zie .env.example}
     ports:
       - "8081:8080"
     networks:

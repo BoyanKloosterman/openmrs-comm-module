@@ -11,15 +11,15 @@ Spring Boot-module voor OpenMRS-communicatie. Java 17, Spring Boot 4, PostgreSQL
 
 Alle services — PostgreSQL, RabbitMQ, OpenMRS-referentie en de communicatiemodule — starten met één commando in de projectmap.
 
-### 1. Omgevingsvariabelen (optioneel)
+### 1. Omgevingsvariabelen (verplicht voor Compose)
 
-Docker Compose leest automatisch een bestand `.env` in dezelfde map als `docker-compose.yml` en gebruikt die waarden bij het substitueren van variabelen in het compose-bestand.
+`docker-compose.yml` bevat geen fallbacks: alle waarden komen uit **`.env`** in dezelfde map. Zonder `.env` faalt `docker compose` bij het inlezen (geen secrets in Git).
 
 ```bash
 cp .env.example .env
 ```
 
-In `.env.example` staan placeholders (`changeme`) voor wachtwoorden; vervang die in je lokale `.env` door je eigen waarden (overal hetzelfde als je niets wilt splitsen). Zonder `.env`-bestand gebruikt Compose de ingebouwde defaults uit `docker-compose.yml`.
+Pas in `.env` de placeholders (`changeme`) aan. Gebruikersnamen en URLs in het voorbeeld passen bij de servicenamen in Compose.
 
 ### 2. Stack bouwen en starten
 
