@@ -1,5 +1,4 @@
 version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
@@ -40,7 +39,7 @@ services:
       - comm-network
 
   openmrs:
-    image: openmrs/openmrs-core:latest
+    image: openmrs/openmrs-core:2.5.15-amazoncorretto-11
     container_name: openmrs-server
     depends_on:
       postgres:
