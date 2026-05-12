@@ -71,7 +71,7 @@
 		<!-- FHIR R4 model en parser; voor DSTU3/R5: ander hapi-fhir-structures-* artefact -->
 		<dependency>
 			<groupId>ca.uhn.hapi.fhir</groupId>
-			<artifactId>hapi-fhir-structures-r4</artifactId>
+			<artifactId>hapi-fhir-client</artifactId>
 			<version>${hapi.fhir.version}</version>
 		</dependency>
 		<dependency>

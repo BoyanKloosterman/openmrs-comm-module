@@ -122,6 +122,10 @@ services:
       SPRING_RABBITMQ_PASSWORD: ${SPRING_RABBITMQ_PASSWORD:?Zie .env.example}
       # Basis-URL; FHIR R4: /ws/fhir2/R4 (Encounter i.p.v. Appointment in standaard FHIR2)
       OPENMRS_URL: ${OPENMRS_URL:?Zie .env.example}
+      # Zelfde host/poort als OPENMRS_URL; aparte base voor FHIR REST (Spring leest dit uit env)
+      OPENMRS_FHIR_SERVER_URL: ${OPENMRS_FHIR_SERVER_URL:?Zie .env.example}
+      OPENMRS_FHIR_USERNAME: ${OPENMRS_FHIR_USERNAME:?Zie .env.example}
+      OPENMRS_FHIR_PASSWORD: ${OPENMRS_FHIR_PASSWORD:?Zie .env.example}
       PROVIDERS_BASE_URL: ${PROVIDERS_BASE_URL:-http://fakecomworld:8080}
       PROVIDERS_STUDENT_GROUP: ${PROVIDERS_STUDENT_GROUP:-group-c8}
       SWIFTSEND_API_KEY: ${SWIFTSEND_API_KEY:-your-api-key-here}
