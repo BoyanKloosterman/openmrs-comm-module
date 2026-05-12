@@ -59,7 +59,7 @@ Health van de app:
 http://localhost:8081/actuator/health
 ```
 
-OpenMRS (referentie) staat op hostpoort **8080**: [http://localhost:8080/openmrs](http://localhost:8080/openmrs). RabbitMQ Management: [http://localhost:15672](http://localhost:15672) (gebruiker/wachtwoord zoals in `.env.example`).
+OpenMRS (platform **2.7.9** + FHIR2 + **Legacy UI**) staat op hostpoort **8080**: [http://localhost:8080/openmrs](http://localhost:8080/openmrs) — je krijgt een normale inlogpagina (gebruiker `Admin`, wachtwoord uit `.env`). Na een Dockerfile-wijziging: `docker compose build openmrs` en stack herstarten; zie je nog de oude kale pagina door een bestaand volume, wis het volume `openmrs_data` of gebruik `docker compose down -v` (let op: alle compose-volumes weg). RabbitMQ Management: [http://localhost:15672](http://localhost:15672) (gebruiker/wachtwoord zoals in `.env.example`).
 
 ### Stack stoppen
 

@@ -106,7 +106,7 @@ services:
       SPRING_RABBITMQ_PORT: ${SPRING_RABBITMQ_PORT:?Zie .env.example}
       SPRING_RABBITMQ_USERNAME: ${SPRING_RABBITMQ_USERNAME:?Zie .env.example}
       SPRING_RABBITMQ_PASSWORD: ${SPRING_RABBITMQ_PASSWORD:?Zie .env.example}
-      # Basis-URL; FHIR R4: /ws/fhir2/R4 (bv. Appointment)
+      # Basis-URL; FHIR R4: /ws/fhir2/R4 (Encounter i.p.v. Appointment in standaard FHIR2)
       OPENMRS_URL: ${OPENMRS_URL:?Zie .env.example}
       # Default: service otel-collector (oude .env zonder deze key blijft werken)
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: ${MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT:-http://otel-collector:4318/v1/traces}
