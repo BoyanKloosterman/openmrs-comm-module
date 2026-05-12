@@ -20,6 +20,9 @@ FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
+# curl voor Docker healthcheck
+RUN apk add --no-cache curl
+
 # Copy the built JAR from builder stage
 COPY --from=builder /app/target/comm-module-*.jar app.jar
 
