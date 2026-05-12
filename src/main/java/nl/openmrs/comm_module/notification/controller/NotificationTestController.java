@@ -1,30 +1,40 @@
 package nl.openmrs.comm_module.notification.controller;
 
-import nl.openmrs.comm_module.config.RabbitMqConfig;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import nl.openmrs.comm_module.messaging.queue.RabbitMqProducer;
+import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
+import nl.openmrs.comm_module.provider.MessagingProviderType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.Instant;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/notifications")
 public class NotificationTestController {
 
-    private final RabbitTemplate rabbitTemplate;
+    private final RabbitMqProducer rabbitMqProducer;
 
-    public NotificationTestController(RabbitTemplate rabbitTemplate) {
-        this.rabbitTemplate = rabbitTemplate;
+    public NotificationTestController(RabbitMqProducer rabbitMqProducer) {
+        this.rabbitMqProducer = rabbitMqProducer;
     }
 
     @PostMapping("/test")
-    public ResponseEntity<String> sendTestNotification() {
-        rabbitTemplate.convertAndSend(
-                RabbitMqConfig.NOTIFICATION_EXCHANGE,
-                RabbitMqConfig.NOTIFICATION_ROUTING_KEY,
-                "Test notification"
+    public ResponseEntity<String> queueTestNotification(
+            @RequestParam(defaultValue = "SWIFTSEND") MessagingProviderType provider
+    ) {
+        NotificationQueueMessage message = new NotificationQueueMessage(
+                UUID.randomUUID(),
+                "+31612345678",
+                "Afspraak herinnering",
+                "U heeft morgen om 10:00 een afspraak in kamer A12.",
+                provider,
+                "APPOINTMENT_REMINDER",
+                Instant.now()
         );
 
-        return ResponseEntity.ok("Notification placed on queue");
+        rabbitMqProducer.publish(message);
+
+        return ResponseEntity.accepted().body("Notification queued for provider: " + provider);
     }
 }
