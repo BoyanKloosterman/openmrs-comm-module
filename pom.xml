@@ -28,6 +28,8 @@
 	</scm>
 	<properties>
 		<java.version>17</java.version>
+		<!-- HAPI FHIR: bij meerdere modules dezelfde versie gebruiken -->
+		<hapi.fhir.version>8.2.0</hapi.fhir.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -65,6 +67,12 @@
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>
+		</dependency>
+		<!-- FHIR R4 model en parser; voor DSTU3/R5: ander hapi-fhir-structures-* artefact -->
+		<dependency>
+			<groupId>ca.uhn.hapi.fhir</groupId>
+			<artifactId>hapi-fhir-structures-r4</artifactId>
+			<version>${hapi.fhir.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.postgresql</groupId>
