@@ -106,8 +106,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      # OpenMRS wordt pas minuten later "healthy"; comm-module kan al starten en
+      # FHIR-calls retrien (Spring health blijft ok). Prometheus/Grafana volgen.
       openmrs:
-        condition: service_healthy
+        condition: service_started
       otel-collector:
         condition: service_started
       fakecomworld:
