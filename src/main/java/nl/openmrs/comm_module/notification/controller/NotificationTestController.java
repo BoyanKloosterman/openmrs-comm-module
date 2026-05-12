@@ -1,4 +1,4 @@
-package nl.openmrs.comm_module.controller;
+package nl.openmrs.comm_module.notification.controller;
 
 import nl.openmrs.comm_module.config.RabbitMqConfig;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
