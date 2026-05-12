@@ -18,6 +18,7 @@ services:
       retries: 5
     networks:
       - comm-network
+    restart: unless-stopped
 
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
@@ -37,6 +38,7 @@ services:
       retries: 5
     networks:
       - comm-network
+    restart: unless-stopped
 
   openmrs:
     build:
@@ -71,6 +73,7 @@ services:
       start_period: 300s
     networks:
       - comm-network
+    restart: unless-stopped
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.115.1
@@ -83,6 +86,7 @@ services:
       - "4318:4318"
     networks:
       - comm-network
+    restart: unless-stopped
 
   comm-module:
     build:
@@ -120,6 +124,7 @@ services:
       start_period: 60s
     networks:
       - comm-network
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:v2.55.1
@@ -137,13 +142,14 @@ services:
         condition: service_started
     networks:
       - comm-network
+    restart: unless-stopped
 
   grafana:
     image: grafana/grafana:11.3.0
     container_name: comm-module-grafana
     environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?Zie .env.example}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Zie .env.example}
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana_data:/var/lib/grafana
@@ -154,6 +160,7 @@ services:
       - prometheus
     networks:
       - comm-network
+    restart: unless-stopped
 
 volumes:
   postgres_data:
