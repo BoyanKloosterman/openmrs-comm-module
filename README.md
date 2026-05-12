@@ -1,54 +1,113 @@
 # OpenMRS Comm Module
 
-Spring Boot module voor OpenMRS communicatie. Gebouwd met Java 17, Spring Boot 4 en PostgreSQL.
+Spring Boot-module voor OpenMRS-communicatie. Java 17, Spring Boot 4, PostgreSQL en RabbitMQ.
 
 ## Vereisten
 
-- Java 17 (JDK)
-- Maven (of gebruik de meegeleverde `mvnw` wrapper)
-- Docker + Docker Compose (voor PostgreSQL en RabbitMQ)
+- Docker en Docker Compose (aanbevolen: volledige stack in één keer)
+- Optioneel voor lokaal bouwen zonder container: Java 17 en Maven (of `mvnw`)
 
-## Opstarten
+## Opstarten (aanbevolen): alles met Docker Compose
 
-### 1. Omgevingsvariabelen
+Alle services — PostgreSQL, RabbitMQ, OpenMRS-referentie en de communicatiemodule — starten met één commando in de projectmap.
 
-Kopieer het voorbeeldbestand en vul de waarden in.
+### 1. Omgevingsvariabelen (verplicht voor Compose)
+
+`docker-compose.yml` bevat geen fallbacks: alle waarden komen uit **`.env`** in dezelfde map. Zonder `.env` faalt `docker compose` bij het inlezen (geen secrets in Git).
 
 ```bash
 cp .env.example .env
 ```
 
-### 2. Infrastructuur starten (Postgres + RabbitMQ)
+Pas in `.env` de placeholders (`changeme`) aan. Gebruikersnamen en URLs in het voorbeeld passen bij de servicenamen in Compose.
+
+### 2. Stack bouwen en starten
+
+Eerste keer kan OpenMrs enkele minuten nodig hebben voordat de healthcheck groen is.
 
 ```bash
-docker compose -f dockercompose.yml up -d
+docker compose up -d --build
 ```
 
-### 3. Applicatie starten
+Status bekijken:
 
-Op Windows (PowerShell):
+```bash
+docker compose ps
+```
+
+### 3. Voorbeeldrequest: notificatie op de wachtrij
+
+De module luistert in Docker op hostpoort **8081** (containerpoort 8080).
+
+**Linux / macOS / Git Bash:**
+
+```bash
+curl -sS -X POST http://localhost:8081/api/notifications/test
+```
+
+Verwachte respons: `Notification placed on queue`
+
+**Windows PowerShell:**
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:8081/api/notifications/test
+```
+
+Health van de app:
+
+```text
+http://localhost:8081/actuator/health
+```
+
+OpenMRS (referentie) staat op hostpoort **8080**: [http://localhost:8080/openmrs](http://localhost:8080/openmrs). RabbitMQ Management: [http://localhost:15672](http://localhost:15672) (gebruiker/wachtwoord zoals in `.env.example`).
+
+### Stack stoppen
+
+```bash
+docker compose down
+```
+
+---
+
+## Optioneel: applicatie lokaal met Maven (infra wel in Docker)
+
+Alleen PostgreSQL en RabbitMQ starten (zonder OpenMRS en zonder comm-module-container):
+
+```bash
+docker compose up -d postgres rabbitmq
+```
+
+Daarna Spring Boot op de host; standaardpoort **8080**. Zet minimaal `SPRING_DATASOURCE_URL` (bijv. `jdbc:postgresql://localhost:5432/openmrs`), databasegebruikersnaam/-wachtwoord en RabbitMQ-host `localhost` in omgeving of `application-local.properties` (niet meegeleverd).
 
 ```powershell
 .\mvnw.cmd spring-boot:run
 ```
 
-Op Linux/macOS:
-
 ```bash
 ./mvnw spring-boot:run
 ```
 
-De applicatie draait standaard op [http://localhost:8080](http://localhost:8080).
+Voorbeeldrequest lokaal:
+
+```bash
+curl -sS -X POST http://localhost:8080/api/notifications/test
+```
+
+---
 
 ## Build
 
-JAR bouwen zonder tests.
+JAR bouwen (tests overslaan):
 
 ```bash
 ./mvnw clean package -DskipTests
 ```
 
-Daarna draaien via.
+```powershell
+.\mvnw.cmd clean package -DskipTests
+```
+
+Draaien:
 
 ```bash
 java -jar target/comm-module-0.0.1-SNAPSHOT.jar
@@ -60,14 +119,10 @@ java -jar target/comm-module-0.0.1-SNAPSHOT.jar
 ./mvnw test
 ```
 
-## Actuator
-
-Healthcheck endpoint beschikbaar via [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health).
-
 ## Projectstructuur
 
-- `src/main/java/nl/openmrs/comm_module` - applicatiecode
-- `src/main/resources/application.properties` - configuratie
-- `src/test/java` - tests
-- `dockercompose.yml` - lokale infra (Postgres, RabbitMQ)
-
+- `src/main/java/nl/openmrs/comm_module` — applicatiecode
+- `src/main/resources/application.properties` — configuratie
+- `src/test/java` — tests
+- `docker-compose.yml` — volledige lokale stack
+- `.env.example` — voorbeeld omgevingsvariabelen voor Compose

@@ -1,0 +1,16 @@
+"Wij hebben de communicatiemodule werkend opgezet in een Docker-omgeving, en asynchroon verbonden met minimaal één messaging provider — gedocumenteerd met een ADR over messaging en een C4-architectuurdiagram op level 1 en 2."
+
+Deliverables sprint 2
+1. Werkende codebase in Docker
+De communicatiemodule start op met één commando (docker compose up) en verwerkt een voorbeeldrequest dat een notificatie triggert. De README beschrijft het opstartcommando en het voorbeeldrequest.
+
+2. Asynchroniteit
+De module is opgezet met aandacht voor temporal/behavioral coupling met zowel de messaging providers as OpenMRS. De provider-adapterstructuur is zo opgezet dat nieuwe providers in sprint 3 zonder grote wijzigingen toegevoegd kunnen worden.
+
+3. ADR 4 — Queues 
+Jullie leggen vast welke queuing infrastructuur gekozen is (bijv. RabbitMQ) en hoe deze is ingericht t.b.v. de (niet) functionele eisen van de opdracht.
+
+4. C4-diagram level 1 en 2
+
+Level 1 (systeemcontext): toont de communicatiemodule als black box in relatie tot OpenMRS, de messaging providers en de beheerder.
+Level 2 (containerdiagram): toont de interne containers van de module — denk aan de integratie met OpenMRS, infrastructuur, database en de messaging providers.

@@ -1,0 +1,10 @@
+# Prometheus scrapet comm-module (intern netwerk)
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: comm-module
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["comm-module:8080"]

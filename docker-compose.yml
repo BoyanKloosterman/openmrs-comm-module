@@ -3,15 +3,16 @@ services:
     image: postgres:15-alpine
     container_name: comm-module-db
     environment:
-      POSTGRES_DB: openmrs
-      POSTGRES_USER: openmrs_user
-      POSTGRES_PASSWORD: openmrs_password
+      POSTGRES_DB: ${POSTGRES_DB:?Zie .env.example}
+      POSTGRES_USER: ${POSTGRES_USER:?Zie .env.example}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Zie .env.example}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U openmrs_user -d openmrs"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -22,8 +23,8 @@ services:
     image: rabbitmq:3.12-management-alpine
     container_name: comm-module-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: commuser
-      RABBITMQ_DEFAULT_PASS: commpassword
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:?Zie .env.example}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?Zie .env.example}
     ports:
       - "5672:5672"    # AMQP port
       - "15672:15672"  # Management UI port
@@ -52,12 +53,12 @@ services:
       OMRS_DB: postgresql
       OMRS_DB_HOSTNAME: postgres
       OMRS_DB_PORT: 5432
-      OMRS_DB_NAME: openmrs
-      OMRS_DB_USERNAME: openmrs_user
-      OMRS_DB_PASSWORD: openmrs_password
+      OMRS_DB_NAME: ${POSTGRES_DB:?Zie .env.example}
+      OMRS_DB_USERNAME: ${POSTGRES_USER:?Zie .env.example}
+      OMRS_DB_PASSWORD: ${POSTGRES_PASSWORD:?Zie .env.example}
       OMRS_CREATE_TABLES: "true"
       OMRS_AUTO_UPDATE_DATABASE: "true"
-      OMRS_ADMIN_USER_PASSWORD: Admin123
+      OMRS_ADMIN_USER_PASSWORD: ${OMRS_ADMIN_USER_PASSWORD:?Zie .env.example}
     ports:
       - "8080:8080"
     volumes:
@@ -68,6 +69,18 @@ services:
       timeout: 10s
       retries: 20
       start_period: 300s
+    networks:
+      - comm-network
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    container_name: comm-module-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./docker/otel-collector/otel-collector.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
     networks:
       - comm-network
 
@@ -83,18 +96,62 @@ services:
         condition: service_healthy
       openmrs:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/openmrs
-      SPRING_DATASOURCE_USERNAME: openmrs_user
-      SPRING_DATASOURCE_PASSWORD: openmrs_password
-      SPRING_RABBITMQ_HOST: rabbitmq
-      SPRING_RABBITMQ_PORT: 5672
-      SPRING_RABBITMQ_USERNAME: commuser
-      SPRING_RABBITMQ_PASSWORD: commpassword
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?Zie .env.example}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?Zie .env.example}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?Zie .env.example}
+      SPRING_RABBITMQ_HOST: ${SPRING_RABBITMQ_HOST:?Zie .env.example}
+      SPRING_RABBITMQ_PORT: ${SPRING_RABBITMQ_PORT:?Zie .env.example}
+      SPRING_RABBITMQ_USERNAME: ${SPRING_RABBITMQ_USERNAME:?Zie .env.example}
+      SPRING_RABBITMQ_PASSWORD: ${SPRING_RABBITMQ_PASSWORD:?Zie .env.example}
       # Basis-URL; FHIR R4: /ws/fhir2/R4 (bv. Appointment)
-      OPENMRS_URL: http://openmrs:8080/openmrs
+      OPENMRS_URL: ${OPENMRS_URL:?Zie .env.example}
+      # Default: service otel-collector (oude .env zonder deze key blijft werken)
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: ${MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT:-http://otel-collector:4318/v1/traces}
     ports:
       - "8081:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - comm-network
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: comm-module-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      comm-module:
+        condition: service_started
+    networks:
+      - comm-network
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: comm-module-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
     networks:
       - comm-network
 
@@ -102,6 +159,7 @@ volumes:
   postgres_data:
   rabbitmq_data:
   openmrs_data:
+  grafana_data:
 
 networks:
   comm-network:
