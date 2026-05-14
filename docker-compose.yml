@@ -65,8 +65,9 @@ services:
       - "8080:8080"
     volumes:
       - openmrs_data:/openmrs/data
+    # /openmrs/health/alive geeft 404 op deze image; root/login reageert wel 200 als app klaar is
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/openmrs/health/alive"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/openmrs/"]
       interval: 15s
       timeout: 10s
       retries: 20

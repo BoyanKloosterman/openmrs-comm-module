@@ -7,8 +7,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class OpenmrsFhirConfig {
 
-    @Bean
-    public FhirContext fhirContext() {
+    @Bean("fhirContextR4")
+    public FhirContext fhirContextR4() {
         return FhirContext.forR4();
     }
 }
