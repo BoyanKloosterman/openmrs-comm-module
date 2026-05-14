@@ -6,6 +6,8 @@ import ca.uhn.fhir.context.FhirContext;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.hl7.fhir.r4.model.CapabilityStatement;
+import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.Encounter;
 
 @Component
 public class OpenmrsFhirClient {
@@ -22,5 +24,14 @@ public class OpenmrsFhirClient {
                 .ofType(CapabilityStatement.class)
                 .execute();
         return metadata.getSoftware().getName() + " " + metadata.getSoftware().getVersion();
+    }
+
+    public Bundle searchEncountersSince(String isoDate) {
+        // isoDate bv. "2026-05-01" — FHIR date formaat (dag-resolutie)
+        return client.search()
+                .forResource(Encounter.class)
+                .where(Encounter.DATE.afterOrEquals().day(isoDate))
+                .returnBundle(Bundle.class)
+                .execute();
     }
 }

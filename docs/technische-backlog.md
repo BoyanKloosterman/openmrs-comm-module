@@ -42,7 +42,7 @@
 | 003-1 | HAPI FHIR dependency toevoegen aan pom.xml | Config | 0.5d | feature/US-003-fhir-polling |
 | 003-2 | FHIR client opzetten die verbinding maakt met OpenMRS FHIR API | Backend | 0.5d | feature/US-003-fhir-polling |
 | 003-3 | Polling-service schrijven met @Scheduled die elke X minuten draait | Backend | 0.5d | feature/US-003-fhir-polling |
-| 003-4 | Appointment-resource parsen naar eigen Appointment datamodel | Backend | 1d | feature/US-003-fhir-polling |
+| 003-4 | FHIR **Encounter** (OpenMRS FHIR2) parsen naar eigen poll-DTO — geen Appointment op deze stack | Backend | 1d | feature/US-003-fhir-polling |
 | 003-5 | Patient-resource ophalen en koppelen aan afspraak | Backend | 0.5d | feature/US-003-fhir-polling |
 | 003-6 | Afspraken opslaan in PostgreSQL via JPA repository | Backend | 0.5d | feature/US-003-fhir-polling |
 | 003-7 | Foutafhandeling: retry bij offline OpenMRS met logging | Backend | 0.5d | feature/US-003-fhir-polling |
