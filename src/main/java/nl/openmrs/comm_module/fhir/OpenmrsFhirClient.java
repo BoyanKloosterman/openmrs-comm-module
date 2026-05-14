@@ -1,13 +1,18 @@
 package nl.openmrs.comm_module.fhir;
+import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
-import org.springframework.stereotype.Component;
-import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
+import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
+import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.CapabilityStatement;
+import org.hl7.fhir.r4.model.Encounter;
+import org.hl7.fhir.r4.model.Patient;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.hl7.fhir.r4.model.CapabilityStatement;
-import org.hl7.fhir.r4.model.Bundle;
-import org.hl7.fhir.r4.model.Encounter;
+import org.springframework.stereotype.Component;
+
+import java.util.Optional;
 
 @Component
 public class OpenmrsFhirClient {
@@ -33,5 +38,26 @@ public class OpenmrsFhirClient {
                 .where(Encounter.DATE.afterOrEquals().day(isoDate))
                 .returnBundle(Bundle.class)
                 .execute();
+    }
+
+    /** Haalt Patient op id; leeg bij 404 of lege id. */
+    public Optional<Patient> readPatientByLogicalId(String logicalId) {
+        if (logicalId == null || logicalId.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            Patient patient = client.read()
+                    .resource(Patient.class)
+                    .withId(logicalId.trim())
+                    .execute();
+            return Optional.ofNullable(patient);
+        } catch (ResourceNotFoundException e) {
+            return Optional.empty();
+        } catch (BaseServerResponseException e) {
+            if (e.getStatusCode() == 404) {
+                return Optional.empty();
+            }
+            throw e;
+        }
     }
 }
