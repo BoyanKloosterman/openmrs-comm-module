@@ -1,6 +1,8 @@
 package nl.openmrs.comm_module.scheduling;
 
-import nl.openmrs.comm_module.fhir.OpenmrsFhirClient;
+import nl.openmrs.comm_module.config.OpenmrsFhirProperties;
+import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
+import nl.openmrs.comm_module.poll.EncounterPollPersistence;
 import nl.openmrs.comm_module.messaging.fhir.EncounterFhirMapper;
 import nl.openmrs.comm_module.messaging.fhir.PatientFhirMapper;
 import nl.openmrs.comm_module.messaging.fhir.dto.EncounterPollDto;
@@ -11,7 +13,6 @@ import org.hl7.fhir.r4.model.Encounter;
 import org.hl7.fhir.r4.model.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -27,33 +28,36 @@ import java.util.Optional;
 public class OpenmrsFhirPollingService {
 
     private static final Logger log = LoggerFactory.getLogger(OpenmrsFhirPollingService.class);
-    private final OpenmrsFhirClient openmrsFhirClient;
+    private final OpenmrsFhirOperations fhirOperations;
     private final EncounterFhirMapper encounterFhirMapper;
     private final PatientFhirMapper patientFhirMapper;
-    private final int encounterPollSinceDays;
+    private final EncounterPollPersistence encounterPollPersistence;
+    private final OpenmrsFhirProperties fhirProperties;
 
     public OpenmrsFhirPollingService(
-            OpenmrsFhirClient openmrsFhirClient,
+            OpenmrsFhirOperations fhirOperations,
             EncounterFhirMapper encounterFhirMapper,
             PatientFhirMapper patientFhirMapper,
-            @Value("${openmrs.fhir.encounter-poll-since-days:30}") int encounterPollSinceDays) {
-        this.openmrsFhirClient = openmrsFhirClient;
+            EncounterPollPersistence encounterPollPersistence,
+            OpenmrsFhirProperties fhirProperties) {
+        this.fhirOperations = fhirOperations;
         this.encounterFhirMapper = encounterFhirMapper;
         this.patientFhirMapper = patientFhirMapper;
-        this.encounterPollSinceDays = encounterPollSinceDays;
+        this.encounterPollPersistence = encounterPollPersistence;
+        this.fhirProperties = fhirProperties;
     }
 
-    @Scheduled(fixedDelayString = "#{${openmrs.fhir.poll-interval-minutes:1} * 60 * 1000}")
+    @Scheduled(fixedDelayString = "#{@openmrsFhirProperties.pollDelayMillis()}")
     public void pollOpenmrsFhir() {
         log.debug("FHIR poll gestart");
         try {
-            String info = openmrsFhirClient.fetchServerSoftwareNameAndVersion();
+            String info = fhirOperations.fetchServerSoftwareNameAndVersion();
             log.info("FHIR server: {}", info);
 
             String since = LocalDate.now(ZoneOffset.UTC)
-                    .minusDays(Math.max(0, encounterPollSinceDays))
+                    .minusDays(Math.max(0, fhirProperties.getEncounterPollSinceDays()))
                     .toString();
-            Bundle bundle = openmrsFhirClient.searchEncountersSince(since);
+            Bundle bundle = fhirOperations.searchEncountersSince(since);
             List<EncounterPollDto> snapshots = mapBundle(bundle);
             List<EncounterWithPatientDto> withPatients = attachPatients(snapshots);
 
@@ -64,8 +68,10 @@ public class OpenmrsFhirPollingService {
                     snapshots.size(),
                     metPatient,
                     since);
+
+            encounterPollPersistence.upsertPollResults(fhirProperties.getOrganisationId(), withPatients);
         } catch (RuntimeException e) {
-            // US-003-7: uitgebreide retry; nu alleen loggen zodat scheduler blijft draaien
+            // Na retries in RetryingOpenmrsFhirOperations: scheduler mag niet crashen
             log.error("FHIR poll mislukt: {}", e.getMessage(), e);
         }
     }
@@ -109,7 +115,7 @@ public class OpenmrsFhirPollingService {
     }
 
     private Optional<PatientPollDto> loadPatientPollDto(String patientLogicalId) {
-        return openmrsFhirClient
+        return fhirOperations
                 .readPatientByLogicalId(patientLogicalId)
                 .flatMap(patientFhirMapper::mapPatient);
     }

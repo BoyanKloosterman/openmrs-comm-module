@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 import java.util.Optional;
 
 @Component
-public class OpenmrsFhirClient {
+public class OpenmrsFhirClient implements OpenmrsFhirOperations {
     private final IGenericClient client;
 
     public OpenmrsFhirClient(@Qualifier("fhirContextR4") FhirContext fhirContext, @Value("${openmrs.fhir.server-url}") String fhirServerUrl, @Value("${openmrs.fhir.username}") String fhirUsername, @Value("${openmrs.fhir.password}") String fhirPassword) {
