@@ -45,7 +45,7 @@ Sprint 2 | HBO Software Engineering | Groep C8
 **User story:** Als systeem wil ik afspraakdata periodiek ophalen uit OpenMRS via de FHIR API zodat de communicatiemodule altijd actuele afspraken heeft om notificaties op te baseren.
 
 **Acceptatiecriteria:**
-- De module pollt de FHIR Appointment-resource van elke gekoppelde OpenMRS-instantie.
+- De module pollt FHIR-bezoekdata (**Encounter** op OpenMRS FHIR2; `Appointment` wordt hier niet gebruikt) van elke gekoppelde OpenMRS-instantie.
 - Nieuwe en gewijzigde afspraken worden opgeslagen in de eigen database.
 - Afspraken die al voorbij zijn worden niet opnieuw verwerkt.
 - Als OpenMRS offline is, logt de module de fout en probeert het bij de volgende cyclus opnieuw.
