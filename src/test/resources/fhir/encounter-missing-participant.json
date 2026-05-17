@@ -1,0 +1,27 @@
+{
+  "resourceType": "Encounter",
+  "id": "encounter-no-participant",
+  "status": "finished",
+  "class": {
+    "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+    "code": "AMB"
+  },
+  "subject": {
+    "reference": "Patient/patient-42"
+  },
+  "period": {
+    "start": "2026-05-14T10:15:30Z"
+  },
+  "participant": [],
+  "type": [
+    {
+      "coding": [
+        {
+          "system": "http://snomed.info/sct",
+          "code": "185389009",
+          "display": "Follow-up visit"
+        }
+      ]
+    }
+  ]
+}
