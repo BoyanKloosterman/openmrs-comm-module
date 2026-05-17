@@ -12,9 +12,9 @@ class AesEncryptionServiceTest {
 
     @BeforeEach
     void setUp() {
-        // 32-byte key
-        String key = "this-is-a-strong-32-byte-key!!";
-        String wrongKey = "this-is-a-wrong-32-byte-key!!";
+        // AES-256: exact 32 UTF-8 bytes
+        String key = "01234567890123456789012345678901";
+        String wrongKey = "01234567890123456789012345678902";
         encryptionService = new AesEncryptionService(key);
         wrongKeyService = new AesEncryptionService(wrongKey);
     }
