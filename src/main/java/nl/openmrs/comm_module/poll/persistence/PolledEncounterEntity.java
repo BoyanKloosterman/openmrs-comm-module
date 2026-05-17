@@ -1,6 +1,7 @@
 package nl.openmrs.comm_module.poll.persistence;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -9,6 +10,8 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
+
+import nl.openmrs.comm_module.persistence.EncryptedStringConverter;
 
 @Entity
 @Table(
@@ -36,18 +39,22 @@ public class PolledEncounterEntity {
     @Column(name = "encounter_datetime", nullable = false)
     private Instant encounterDatetime;
 
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "location_id", length = 128)
     private String locationId;
 
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "encounter_type", length = 512)
     private String encounterType;
 
     @Column(name = "voided", nullable = false)
     private boolean voided;
 
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "patient_display_name", length = 512)
     private String patientDisplayName;
 
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "patient_phone", length = 128)
     private String patientPhone;
 
