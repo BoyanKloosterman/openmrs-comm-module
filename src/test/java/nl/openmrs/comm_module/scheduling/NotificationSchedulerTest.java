@@ -8,6 +8,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,5 +38,14 @@ class NotificationSchedulerTest {
         when(properties.isEnabled()).thenReturn(false);
         notificationScheduler.checkDueNotifications();
         verify(dueNotificationProcessor, never()).processDueNotifications();
+    }
+
+    @Test
+    void vangtProcessorFoutOpZonderSchedulerTeStoppen() {
+        when(properties.isEnabled()).thenReturn(true);
+        doThrow(new RuntimeException("db-fout")).when(dueNotificationProcessor).processDueNotifications();
+
+        assertDoesNotThrow(() -> notificationScheduler.checkDueNotifications());
+        verify(dueNotificationProcessor).processDueNotifications();
     }
 }

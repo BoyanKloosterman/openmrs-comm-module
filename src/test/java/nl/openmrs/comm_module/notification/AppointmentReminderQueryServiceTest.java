@@ -72,6 +72,18 @@ class AppointmentReminderQueryServiceTest {
     }
 
     @Test
+    void encounterOpVensterGrensWordtGevonden() {
+        // target = 19 mei 10:00; venster ±30 min → 09:30 t/m 10:30 exclusief einde
+        save(ORG, "enc-grens-start", Instant.parse("2026-05-19T09:30:00Z"), false);
+        save(ORG, "enc-grens-einde", Instant.parse("2026-05-19T10:29:59Z"), false);
+        save(ORG, "enc-buiten", Instant.parse("2026-05-19T10:30:00Z"), false);
+
+        List<PolledEncounterEntity> due = queryService.findEncountersDueFor24HourReminder();
+
+        assertEquals(2, due.size());
+    }
+
+    @Test
     void sluitBegonnenAfspraakInVensterUit() {
         // In DB-venster maar starttijd al verstreken t.o.v. NOW (US-001-4)
         save(ORG, "enc-started", Instant.parse("2026-05-18T09:30:00Z"), false);
