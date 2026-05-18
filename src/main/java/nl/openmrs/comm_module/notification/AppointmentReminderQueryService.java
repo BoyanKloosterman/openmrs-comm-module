@@ -18,16 +18,19 @@ public class AppointmentReminderQueryService {
     private final PolledEncounterRepository polledEncounterRepository;
     private final OpenmrsFhirProperties fhirProperties;
     private final NotificationSchedulerProperties schedulerProperties;
+    private final AppointmentReminderEligibilityService eligibilityService;
     private final Clock clock;
 
     public AppointmentReminderQueryService(
             PolledEncounterRepository polledEncounterRepository,
             OpenmrsFhirProperties fhirProperties,
             NotificationSchedulerProperties schedulerProperties,
+            AppointmentReminderEligibilityService eligibilityService,
             Clock clock) {
         this.polledEncounterRepository = polledEncounterRepository;
         this.fhirProperties = fhirProperties;
         this.schedulerProperties = schedulerProperties;
+        this.eligibilityService = eligibilityService;
         this.clock = clock;
     }
 
@@ -42,6 +45,9 @@ public class AppointmentReminderQueryService {
         Instant windowEnd = target.plus(halfWindow);
 
         return polledEncounterRepository.findDueForReminderWindow(
-                fhirProperties.getOrganisationId(), now, windowStart, windowEnd);
+                        fhirProperties.getOrganisationId(), now, windowStart, windowEnd)
+                .stream()
+                .filter(e -> eligibilityService.maySend24HourReminder(e, now))
+                .toList();
     }
 }

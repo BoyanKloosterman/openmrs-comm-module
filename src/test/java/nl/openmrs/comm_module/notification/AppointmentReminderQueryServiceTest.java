@@ -71,6 +71,18 @@ class AppointmentReminderQueryServiceTest {
         assertTrue(queryService.findEncountersDueFor24HourReminder().isEmpty());
     }
 
+    @Test
+    void sluitBegonnenAfspraakInVensterUit() {
+        // In DB-venster maar starttijd al verstreken t.o.v. NOW (US-001-4)
+        save(ORG, "enc-started", Instant.parse("2026-05-18T09:30:00Z"), false);
+        save(ORG, "enc-in", Instant.parse("2026-05-19T10:05:00Z"), false);
+
+        List<PolledEncounterEntity> due = queryService.findEncountersDueFor24HourReminder();
+
+        assertEquals(1, due.size());
+        assertEquals("enc-in", due.get(0).getEncounterFhirId());
+    }
+
     private void save(String organisationId, String encounterFhirId, Instant encounterDatetime, boolean voided) {
         PolledEncounterEntity e = new PolledEncounterEntity();
         e.setOrganisationId(organisationId);

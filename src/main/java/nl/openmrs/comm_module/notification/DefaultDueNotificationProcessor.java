@@ -7,26 +7,27 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
-/** Roept US-001-2 query aan; verzending volgt in US-001-3. */
+/** Query (001-2) en queue (001-3) voor 24u-herinneringen. */
 @Component
 public class DefaultDueNotificationProcessor implements DueNotificationProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultDueNotificationProcessor.class);
 
     private final AppointmentReminderQueryService appointmentReminderQueryService;
+    private final AppointmentReminderPublisher appointmentReminderPublisher;
 
-    public DefaultDueNotificationProcessor(AppointmentReminderQueryService appointmentReminderQueryService) {
+    public DefaultDueNotificationProcessor(
+            AppointmentReminderQueryService appointmentReminderQueryService,
+            AppointmentReminderPublisher appointmentReminderPublisher) {
         this.appointmentReminderQueryService = appointmentReminderQueryService;
+        this.appointmentReminderPublisher = appointmentReminderPublisher;
     }
 
     @Override
     public void processDueNotifications() {
         List<PolledEncounterEntity> due =
                 appointmentReminderQueryService.findEncountersDueFor24HourReminder();
-        log.info("24u-herinnering: {} encounter(s) in venster", due.size());
-        if (log.isDebugEnabled()) {
-            due.forEach(e -> log.debug(
-                    "due encounter fhirId={} at {}", e.getEncounterFhirId(), e.getEncounterDatetime()));
-        }
+        int queued = appointmentReminderPublisher.publish24HourReminders(due);
+        log.info("24u-herinnering: {} in venster, {} op queue gezet", due.size(), queued);
     }
 }

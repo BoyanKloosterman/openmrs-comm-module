@@ -1,5 +1,6 @@
 package nl.openmrs.comm_module.config;
 
+import nl.openmrs.comm_module.provider.MessagingProviderType;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +19,14 @@ public class NotificationSchedulerProperties {
 
     /** Hoe vaak gecontroleerd wordt welke notificaties verstuurd moeten worden. */
     private int checkIntervalMinutes = 1;
+
+    /** Tijdelijk tot US-008 provider per organisatie kiest. */
+    private MessagingProviderType defaultProvider = MessagingProviderType.SWIFTSEND;
+
+    private String defaultInstructions = "Kom 10 minuten van tevoren. Neem uw legitimatie mee.";
+
+    /** Weergave datum/tijd in herinneringstekst (US-011 breidt dit uit). */
+    private String reminderZoneId = "Europe/Amsterdam";
 
     public long checkDelayMillis() {
         int minutes = Math.max(1, checkIntervalMinutes);
@@ -54,5 +63,29 @@ public class NotificationSchedulerProperties {
 
     public void setCheckIntervalMinutes(int checkIntervalMinutes) {
         this.checkIntervalMinutes = checkIntervalMinutes;
+    }
+
+    public MessagingProviderType getDefaultProvider() {
+        return defaultProvider;
+    }
+
+    public void setDefaultProvider(MessagingProviderType defaultProvider) {
+        this.defaultProvider = defaultProvider;
+    }
+
+    public String getDefaultInstructions() {
+        return defaultInstructions;
+    }
+
+    public void setDefaultInstructions(String defaultInstructions) {
+        this.defaultInstructions = defaultInstructions;
+    }
+
+    public String getReminderZoneId() {
+        return reminderZoneId;
+    }
+
+    public void setReminderZoneId(String reminderZoneId) {
+        this.reminderZoneId = reminderZoneId;
     }
 }
