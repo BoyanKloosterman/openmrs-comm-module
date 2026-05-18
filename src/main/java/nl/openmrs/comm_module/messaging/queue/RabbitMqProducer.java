@@ -16,8 +16,8 @@ public class RabbitMqProducer {
 
     public void publish(NotificationQueueMessage message) {
         rabbitTemplate.convertAndSend(
-                RabbitMqConfig.NOTIFICATION_EXCHANGE,
-                RabbitMqConfig.NOTIFICATION_ROUTING_KEY,
+                RabbitMqConfig.PROVIDER_EXCHANGE,
+                message.getProvider().getRoutingKey(),
                 message
         );
     }
