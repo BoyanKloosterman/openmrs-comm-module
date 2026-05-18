@@ -4,6 +4,7 @@ import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.notification.persistence.NotificationDeliveryLogRepository;
 import nl.openmrs.comm_module.provider.MessagingProviderType;
 import nl.openmrs.comm_module.provider.ProviderSendResult;
+import nl.openmrs.comm_module.messaging.queue.RabbitMqConsumer;
 import nl.openmrs.comm_module.scheduling.NotificationScheduler;
 import nl.openmrs.comm_module.scheduling.OpenmrsFhirPollingService;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +37,10 @@ class NotificationDeliveryLogServiceTest {
     @MockitoBean
     @SuppressWarnings("unused")
     private NotificationScheduler notificationScheduler;
+
+    @MockitoBean
+    @SuppressWarnings("unused")
+    private RabbitMqConsumer rabbitMqConsumer;
 
     @MockitoBean
     private Clock clock;
