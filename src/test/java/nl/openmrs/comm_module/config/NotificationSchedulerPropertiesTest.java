@@ -19,4 +19,11 @@ class NotificationSchedulerPropertiesTest {
         p.setCheckIntervalMinutes(5);
         assertEquals(5 * 60_000L, p.checkDelayMillis());
     }
+
+    @Test
+    void reminderDefaults() {
+        NotificationSchedulerProperties p = new NotificationSchedulerProperties();
+        assertEquals(24, p.getReminderLeadHours());
+        assertEquals(60, p.getReminderWindowMinutes());
+    }
 }
