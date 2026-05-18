@@ -1,4 +1,4 @@
-# OTLP van de app; traces naar stdout (dev) — later bv. Tempo
+# OTLP van de app; standaard stil (nop). Voor trace-debug: exporter debug i.p.v. nop.
 receivers:
   otlp:
     protocols:
@@ -11,16 +11,15 @@ processors:
   batch: {}
 
 exporters:
-  debug:
-    verbosity: basic
+  nop: {}
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [nop]
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [nop]
