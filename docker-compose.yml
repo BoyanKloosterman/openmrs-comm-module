@@ -10,7 +10,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./src/main/resources/db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 10s
@@ -132,6 +132,12 @@ services:
       PROVIDERS_BASE_URL: ${PROVIDERS_BASE_URL:-http://fakecomworld:8080}
       PROVIDERS_STUDENT_GROUP: ${PROVIDERS_STUDENT_GROUP:-group-c8}
       SWIFTSEND_API_KEY: ${SWIFTSEND_API_KEY:-your-api-key-here}
+      SECUREPOST_CLIENT_ID: ${SECUREPOST_CLIENT_ID:-securepost-client-id}
+      SECUREPOST_CLIENT_SECRET: ${SECUREPOST_CLIENT_SECRET:-securepost-secret-key}
+      LEGACYLINK_USERNAME: ${LEGACYLINK_USERNAME:-legacylink-user}
+      LEGACYLINK_PASSWORD: ${LEGACYLINK_PASSWORD:-legacylink-password}
+      LEGACYLINK_SENDER: ${LEGACYLINK_SENDER:-OpenMRS}
+      ASYNCFLOW_API_KEY: ${ASYNCFLOW_API_KEY:-asyncflow-api-key}
       # Default: service otel-collector (oude .env zonder deze key blijft werken)
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: ${MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT:-http://otel-collector:4318/v1/traces}
     ports:

@@ -21,7 +21,7 @@ public class RabbitMqConsumer {
         this.deliveryLogService = deliveryLogService;
     }
 
-    @RabbitListener(queues = RabbitMqConfig.NOTIFICATION_QUEUE)
+    @RabbitListener(queues = "#{'${messaging.queues}'.split(',')}")
     public void consume(NotificationQueueMessage message) {
         MessagingProvider provider = providerFactory.getProvider(message.getProvider());
         ProviderSendResult result = provider.sendMessage(message);
