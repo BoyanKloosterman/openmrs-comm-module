@@ -134,6 +134,9 @@ services:
       SWIFTSEND_API_KEY: ${SWIFTSEND_API_KEY:-your-api-key-here}
       SECUREPOST_CLIENT_ID: ${SECUREPOST_CLIENT_ID:-securepost-client-id}
       SECUREPOST_CLIENT_SECRET: ${SECUREPOST_CLIENT_SECRET:-securepost-secret-key}
+      LEGACYLINK_USERNAME: ${LEGACYLINK_USERNAME:-legacylink-user}
+      LEGACYLINK_PASSWORD: ${LEGACYLINK_PASSWORD:-legacylink-password}
+      LEGACYLINK_SENDER: ${LEGACYLINK_SENDER:-OpenMRS}
       # Default: service otel-collector (oude .env zonder deze key blijft werken)
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: ${MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT:-http://otel-collector:4318/v1/traces}
     ports:
