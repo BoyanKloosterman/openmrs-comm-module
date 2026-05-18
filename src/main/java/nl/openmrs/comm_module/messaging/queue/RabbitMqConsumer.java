@@ -17,7 +17,7 @@ public class RabbitMqConsumer {
         this.providerFactory = providerFactory;
     }
 
-    @RabbitListener(queues = RabbitMqConfig.NOTIFICATION_QUEUE)
+    @RabbitListener(queues = "#{'${messaging.queues}'.split(',')}")
     public void consume(NotificationQueueMessage message) {
         MessagingProvider provider = providerFactory.getProvider(message.getProvider());
 
@@ -28,5 +28,9 @@ public class RabbitMqConsumer {
         System.out.println("Provider: " + message.getProvider());
         System.out.println("Status: " + result.getStatus());
         System.out.println("Provider message ID: " + result.getProviderMessageId());
+
+        if (!result.isSuccessful()) {
+            System.out.println("Error message: " + result.getErrorMessage());
+        }
     }
 }
