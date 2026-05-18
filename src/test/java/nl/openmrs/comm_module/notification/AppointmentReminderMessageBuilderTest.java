@@ -40,6 +40,7 @@ class AppointmentReminderMessageBuilderTest {
         assertEquals("+31600112233", message.getRecipient());
         assertEquals(MessagingProviderType.SWIFTSEND, message.getProvider());
         assertEquals(AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H, message.getMessageType());
+        assertEquals("enc-1", message.getEncounterFhirId());
         assertTrue(message.getBody().contains("Beste Jan Jansen"));
         assertTrue(message.getBody().contains("Datum:"));
         assertTrue(message.getBody().contains("Tijd:"));

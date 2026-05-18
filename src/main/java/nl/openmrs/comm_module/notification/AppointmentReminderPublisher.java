@@ -17,14 +17,17 @@ public class AppointmentReminderPublisher {
 
     private final AppointmentReminderMessageBuilder messageBuilder;
     private final AppointmentReminderEligibilityService eligibilityService;
+    private final NotificationDeliveryLogService deliveryLogService;
     private final RabbitMqProducer rabbitMqProducer;
 
     public AppointmentReminderPublisher(
             AppointmentReminderMessageBuilder messageBuilder,
             AppointmentReminderEligibilityService eligibilityService,
+            NotificationDeliveryLogService deliveryLogService,
             RabbitMqProducer rabbitMqProducer) {
         this.messageBuilder = messageBuilder;
         this.eligibilityService = eligibilityService;
+        this.deliveryLogService = deliveryLogService;
         this.rabbitMqProducer = rabbitMqProducer;
     }
 
@@ -38,6 +41,13 @@ public class AppointmentReminderPublisher {
                         encounter.getEncounterFhirId());
                 continue;
             }
+            if (deliveryLogService.hasSuccessfulDelivery(
+                    encounter.getEncounterFhirId(), AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H)) {
+                log.debug(
+                        "24u-herinnering overgeslagen voor {}: al eerder succesvol verstuurd",
+                        encounter.getEncounterFhirId());
+                continue;
+            }
             var messageOpt = messageBuilder.build24HourReminder(encounter);
             if (messageOpt.isEmpty()) {
                 log.warn(
@@ -47,6 +57,7 @@ public class AppointmentReminderPublisher {
             }
             NotificationQueueMessage message = messageOpt.get();
             rabbitMqProducer.publish(message);
+            deliveryLogService.recordQueued(message);
             queued++;
             log.info(
                     "24u-herinnering in queue: notificationId={} encounter={} naar {}",

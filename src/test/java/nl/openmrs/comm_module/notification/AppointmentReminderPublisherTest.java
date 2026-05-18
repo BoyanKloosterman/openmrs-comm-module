@@ -30,6 +30,9 @@ class AppointmentReminderPublisherTest {
     private AppointmentReminderEligibilityService eligibilityService;
 
     @Mock
+    private NotificationDeliveryLogService deliveryLogService;
+
+    @Mock
     private RabbitMqProducer rabbitMqProducer;
 
     @InjectMocks
@@ -44,6 +47,7 @@ class AppointmentReminderPublisherTest {
 
         when(eligibilityService.maySend24HourReminder(withPhone)).thenReturn(true);
         when(eligibilityService.maySend24HourReminder(noPhone)).thenReturn(true);
+        when(deliveryLogService.hasSuccessfulDelivery(any(), any())).thenReturn(false);
         when(messageBuilder.build24HourReminder(withPhone)).thenReturn(Optional.of(msg));
         when(messageBuilder.build24HourReminder(noPhone)).thenReturn(Optional.empty());
 
@@ -51,6 +55,7 @@ class AppointmentReminderPublisherTest {
 
         assertEquals(1, queued);
         verify(rabbitMqProducer).publish(msg);
+        verify(deliveryLogService).recordQueued(msg);
     }
 
     @Test
@@ -59,6 +64,20 @@ class AppointmentReminderPublisherTest {
         when(eligibilityService.maySend24HourReminder(started)).thenReturn(false);
 
         assertEquals(0, publisher.publish24HourReminders(List.of(started)));
+
+        verify(messageBuilder, never()).build24HourReminder(any());
+        verify(rabbitMqProducer, never()).publish(any());
+        verify(deliveryLogService, never()).recordQueued(any());
+    }
+
+    @Test
+    void slaatOverBijEerderSuccesvolVerstuurd() {
+        PolledEncounterEntity enc = encounter("enc-done");
+        when(eligibilityService.maySend24HourReminder(enc)).thenReturn(true);
+        when(deliveryLogService.hasSuccessfulDelivery("enc-done", AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H))
+                .thenReturn(true);
+
+        assertEquals(0, publisher.publish24HourReminders(List.of(enc)));
 
         verify(messageBuilder, never()).build24HourReminder(any());
         verify(rabbitMqProducer, never()).publish(any());

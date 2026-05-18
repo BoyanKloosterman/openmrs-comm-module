@@ -50,6 +50,7 @@ public class AppointmentReminderMessageBuilder {
                 schedulerProperties.getDefaultProvider(),
                 MESSAGE_TYPE_24H,
                 Instant.now());
+        message.setEncounterFhirId(encounter.getEncounterFhirId());
 
         return Optional.of(message);
     }

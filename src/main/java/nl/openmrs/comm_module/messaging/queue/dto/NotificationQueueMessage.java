@@ -14,6 +14,8 @@ public class NotificationQueueMessage {
     private MessagingProviderType provider;
     private String messageType;
     private Instant queuedAt;
+    /** Koppeling naar polled encounter (geen PII in delivery log). */
+    private String encounterFhirId;
 
     public NotificationQueueMessage() {
     }
@@ -88,5 +90,13 @@ public class NotificationQueueMessage {
 
     public void setQueuedAt(Instant queuedAt) {
         this.queuedAt = queuedAt;
+    }
+
+    public String getEncounterFhirId() {
+        return encounterFhirId;
+    }
+
+    public void setEncounterFhirId(String encounterFhirId) {
+        this.encounterFhirId = encounterFhirId;
     }
 }
