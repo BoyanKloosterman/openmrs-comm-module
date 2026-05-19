@@ -146,11 +146,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      # OpenMRS wordt pas minuten later "healthy"; comm-module kan al starten en
-      # FHIR-calls retrien (Spring health blijft ok). Prometheus/Grafana volgen.
-      # comm-module retried FHIR; mag starten terwijl fhir-r5 nog opstart
-      fhir-r5:
-        condition: service_started
+      # OpenMRS wordt pas minuten later "healthy"; comm-module mag al starten.
+      # FHIR: wacht op seed (die pollt tot /metadata bereikbaar is) — HAPI heeft 1–3 min nodig.
+      fhir-r5-seed:
+        condition: service_completed_successfully
       openmrs:
         condition: service_started
       otel-collector:

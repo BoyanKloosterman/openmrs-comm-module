@@ -74,7 +74,7 @@ Status:
 docker compose ps
 ```
 
-Wacht tot `comm-module-app` en `comm-module-db` healthy zijn. OpenMRS kan enkele minuten opstarten; de comm-module start al en retried FHIR.
+Wacht tot `comm-module-app` healthy is. **comm-module** start pas na **fhir-r5-seed** (FHIR `/metadata` bereikbaar). Eerste `docker compose up`: HAPI FHIR kan **1–3 minuten** nodig hebben; OpenMRS kan daarnaast nog langer opstarten.
 
 Health comm-module:
 
@@ -260,6 +260,7 @@ Invoke-RestMethod -Method Post -Uri http://localhost:8081/api/notifications/test
 | Geen telefoon | `patient_phone` leeg | Patiënt in OpenMRS of gekopieerde encrypted kolom |
 | `verkeerde org` | `organisation_id` ≠ `OPENMRS_FHIR_ORGANISATION_ID` | Beide op `default` zetten |
 | Geen Appointment-data | FHIR R5-server nog niet healthy / verkeerde URL | Logs `OpenMRS FHIR poll mislukt`; `OPENMRS_FHIR_SERVER_URL` moet `http://fhir-r5:8080/fhir` zijn (niet OpenMRS `/ws/fhir2/R5`). |
+| `Connection refused` op `fhir-r5:8080/metadata` (kort na start) | comm-module pollde vóór HAPI klaar was | Normaal bij oude compose; fix: `depends_on fhir-r5-seed`. Of wacht 2 min en controleer `docker compose ps` / `curl http://localhost:8082/fhir/metadata`. |
 | `dependency fhir-r5 failed to start` | Oude healthcheck of `latest-tomcat` (rechten op `/webapps/ROOT`) | Gebruik `hapiproject/hapi:latest` + `docker compose up -d --force-recreate fhir-r5`. Eerste start duurt 5–8 min. |
 | `Unable to create the directory .../webapps/ROOT` | Verkeerde image `latest-tomcat` | In compose staat `hapiproject/hapi:latest` (Spring Boot). |
 | 404 op FHIR metadata | Verkeerde base-URL of HAPI nog aan het opstarten | `curl http://localhost:8082/fhir/metadata` — `fhirVersion` moet **5.0.0** zijn. |
