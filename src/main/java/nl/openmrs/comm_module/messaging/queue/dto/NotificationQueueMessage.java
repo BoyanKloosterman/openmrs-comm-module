@@ -14,6 +14,7 @@ public class NotificationQueueMessage {
     private MessagingProviderType provider;
     private String messageType;
     private Instant queuedAt;
+    private int retryCount;
 
     public NotificationQueueMessage() {
     }
@@ -89,4 +90,10 @@ public class NotificationQueueMessage {
     public void setQueuedAt(Instant queuedAt) {
         this.queuedAt = queuedAt;
     }
+
+    public int getRetryCount() { return retryCount; }
+
+    public void setRetryCount(int retryCount) { this.retryCount = retryCount; }
+
+    public void incrementRetryCount() { this.retryCount++; }
 }
