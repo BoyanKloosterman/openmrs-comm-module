@@ -171,13 +171,11 @@ WHERE appointment_fhir_id = 'apt-test-docker-002';
 
 > Gebruik altijd `NOW() AT TIME ZONE 'UTC'`. Tijden alleen in +02 in de UI kunnen **buiten venster** lijken terwijl SQL “ok” toont.
 
-### Methode B — Via OpenMRS (realistischer)
+### Methode B — Via FHIR R5 (wat de poller leest)
 
-1. Open [http://localhost:8080/openmrs](http://localhost:8080/openmrs) — login `admin` / wachtwoord uit `.env` (`OPENMRS_FHIR_PASSWORD` of `OMRS_ADMIN_USER_PASSWORD`).
-2. Maak een **patiënt** met telefoonnummer (FHIR telecom type phone).
-3. Maak een **appointment** als FHIR R5-resource op de HAPI-server (`PUT http://localhost:8082/fhir/Appointment/{id}` of via UI op poort 8082). Zie [HL7 Appointment](https://www.hl7.org/fhir/appointment.html). Bij een verse `docker compose up` vult `fhir-r5-seed` al een test-Patient en -Appointment.
-4. Wacht max. **2 minuten** op de poll (`Appointment-poll:` in logs).
-5. Controleer DB:
+1. Maak een **appointment** als FHIR R5-resource op de HAPI-server (`PUT http://localhost:8082/fhir/Appointment/{id}` of via UI op poort 8082). Zie [HL7 Appointment](https://www.hl7.org/fhir/appointment.html). Bij een verse `docker compose up` vult `fhir-r5-seed` al een test-Patient en -Appointment.
+2. Wacht max. **2 minuten** op de poll (`Appointment-poll:` in logs).
+3. Controleer DB:
 
 ```sql
 SELECT appointment_fhir_id, appointment_datetime, patient_phone IS NOT NULL AS heeft_telefoon
@@ -188,6 +186,16 @@ LIMIT 5;
 ```
 
 Zo nodig alleen `appointment_datetime` bijstellen met de UPDATE hierboven (UTC).
+
+### Methode C — Afspraken in OpenMRS Legacy UI
+
+Na `docker compose build openmrs` en recreate (zie `docker/openmrs/README.md`):
+
+1. Login op [http://localhost:8080/openmrs](http://localhost:8080/openmrs) (`admin` + `OMRS_ADMIN_USER_PASSWORD`).
+2. **Administration → Manage Modules**: `Appointment Scheduling Module` = Started.
+3. Menu **Appointments** of patient dashboard → tab **Appointments**.
+
+Dit vult **niet** automatisch `polled_appointment` (poller = alleen FHIR R5 op poort 8082).
 
 ---
 

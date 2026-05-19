@@ -83,8 +83,8 @@ services:
     build:
       context: ./docker/openmrs
       dockerfile: Dockerfile
-    # Lokale tag; niet op Docker Hub — voorkomt pull-fout zonder --build
-    image: openmrs-comm-fhir:2.7.9
+    # Lokale tag; niet op Docker Hub — bij module-wijziging: docker compose build openmrs
+    image: openmrs-comm-fhir:2.5.14-appointments
     pull_policy: build
     container_name: openmrs-server
     depends_on:
