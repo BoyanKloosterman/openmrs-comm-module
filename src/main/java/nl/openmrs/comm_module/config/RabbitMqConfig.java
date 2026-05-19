@@ -9,6 +9,7 @@ import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 
 @Configuration
 public class RabbitMqConfig {
@@ -36,6 +37,13 @@ public class RabbitMqConfig {
     public static final String LEGACYLINK_DLQ_ROUTING_KEY = "dlq.legacylink";
     public static final String ASYNCFLOW_DLQ_ROUTING_KEY = "dlq.asyncflow";
 
+    public static final String RETRY_EXCHANGE = "notification.retry.exchange";
+
+    public static final String SWIFTSEND_RETRY_QUEUE = "retry.swiftsend";
+    public static final String SECUREPOST_RETRY_QUEUE = "retry.securepost";
+    public static final String LEGACYLINK_RETRY_QUEUE = "retry.legacylink";
+    public static final String ASYNCFLOW_RETRY_QUEUE = "retry.asyncflow";
+
     @Bean
     public DirectExchange providerExchange() {
         return new DirectExchange(PROVIDER_EXCHANGE);
@@ -44,6 +52,11 @@ public class RabbitMqConfig {
     @Bean
     public DirectExchange deadLetterExchange() {
         return new DirectExchange(DEAD_LETTER_EXCHANGE);
+    }
+
+    @Bean
+    public DirectExchange retryExchange() {
+        return new DirectExchange(RETRY_EXCHANGE);
     }
 
     @Bean
@@ -78,6 +91,42 @@ public class RabbitMqConfig {
                 .build();
     }
 
+    @Bean("swiftSendRetryQueue")
+    public Queue swiftSendRetryQueue(@Value("${messaging.retry.delay-ms}") int retryDelayMs) {
+        return QueueBuilder.durable(SWIFTSEND_RETRY_QUEUE)
+                .ttl(retryDelayMs)
+                .deadLetterExchange(PROVIDER_EXCHANGE)
+                .deadLetterRoutingKey(SWIFTSEND_ROUTING_KEY)
+                .build();
+    }
+
+    @Bean("securePostRetryQueue")
+    public Queue securePostRetryQueue(@Value("${messaging.retry.delay-ms}") int retryDelayMs) {
+        return QueueBuilder.durable(SECUREPOST_RETRY_QUEUE)
+                .ttl(retryDelayMs)
+                .deadLetterExchange(PROVIDER_EXCHANGE)
+                .deadLetterRoutingKey(SECUREPOST_ROUTING_KEY)
+                .build();
+    }
+
+    @Bean("legacyLinkRetryQueue")
+    public Queue legacyLinkRetryQueue(@Value("${messaging.retry.delay-ms}") int retryDelayMs) {
+        return QueueBuilder.durable(LEGACYLINK_RETRY_QUEUE)
+                .ttl(retryDelayMs)
+                .deadLetterExchange(PROVIDER_EXCHANGE)
+                .deadLetterRoutingKey(LEGACYLINK_ROUTING_KEY)
+                .build();
+    }
+
+    @Bean("asyncFlowRetryQueue")
+    public Queue asyncFlowRetryQueue(@Value("${messaging.retry.delay-ms}") int retryDelayMs) {
+        return QueueBuilder.durable(ASYNCFLOW_RETRY_QUEUE)
+                .ttl(retryDelayMs)
+                .deadLetterExchange(PROVIDER_EXCHANGE)
+                .deadLetterRoutingKey(ASYNCFLOW_ROUTING_KEY)
+                .build();
+    }
+
     @Bean
     public Queue swiftSendDeadLetterQueue() {
         return QueueBuilder.durable(SWIFTSEND_DLQ).build();
@@ -97,6 +146,8 @@ public class RabbitMqConfig {
     public Queue asyncFlowDeadLetterQueue() {
         return QueueBuilder.durable(ASYNCFLOW_DLQ).build();
     }
+
+
 
     @Bean
     public Binding swiftSendBinding() {
@@ -127,6 +178,38 @@ public class RabbitMqConfig {
         return BindingBuilder
                 .bind(asyncFlowQueue())
                 .to(providerExchange())
+                .with(ASYNCFLOW_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding swiftSendRetryBinding(Queue swiftSendRetryQueue) {
+        return BindingBuilder
+                .bind(swiftSendRetryQueue)
+                .to(retryExchange())
+                .with(SWIFTSEND_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding securePostRetryBinding(Queue securePostRetryQueue) {
+        return BindingBuilder
+                .bind(securePostRetryQueue)
+                .to(retryExchange())
+                .with(SECUREPOST_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding legacyLinkRetryBinding(Queue legacyLinkRetryQueue) {
+        return BindingBuilder
+                .bind(legacyLinkRetryQueue)
+                .to(retryExchange())
+                .with(LEGACYLINK_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding asyncFlowRetryBinding(Queue asyncFlowRetryQueue) {
+        return BindingBuilder
+                .bind(asyncFlowRetryQueue)
+                .to(retryExchange())
                 .with(ASYNCFLOW_ROUTING_KEY);
     }
 

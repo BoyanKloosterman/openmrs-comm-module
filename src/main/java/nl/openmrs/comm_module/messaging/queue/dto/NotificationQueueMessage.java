@@ -16,6 +16,7 @@ public class NotificationQueueMessage {
     private Instant queuedAt;
     /** Koppeling naar polled encounter (geen PII in delivery log). */
     private String encounterFhirId;
+    private int retryCount;
 
     public NotificationQueueMessage() {
     }
@@ -98,5 +99,17 @@ public class NotificationQueueMessage {
 
     public void setEncounterFhirId(String encounterFhirId) {
         this.encounterFhirId = encounterFhirId;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(int retryCount) {
+        this.retryCount = retryCount;
+    }
+
+    public void incrementRetryCount() {
+        this.retryCount++;
     }
 }
