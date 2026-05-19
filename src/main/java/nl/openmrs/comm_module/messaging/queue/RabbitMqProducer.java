@@ -15,6 +15,18 @@ public class RabbitMqProducer {
     }
 
     public void publish(NotificationQueueMessage message) {
+        sendToProviderQueue(message);
+    }
+
+    public void publishRetry(NotificationQueueMessage message) {
+        rabbitTemplate.convertAndSend(
+                RabbitMqConfig.RETRY_EXCHANGE,
+                message.getProvider().getRoutingKey(),
+                message
+        );
+    }
+
+    private void sendToProviderQueue(NotificationQueueMessage message) {
         rabbitTemplate.convertAndSend(
                 RabbitMqConfig.PROVIDER_EXCHANGE,
                 message.getProvider().getRoutingKey(),
