@@ -40,7 +40,7 @@ class AppointmentFhirMapperTest {
         assertEquals("test-appointment-1", a.appointmentId());
         assertEquals("patient-42", a.patientId());
         assertEquals(Instant.parse("2026-05-14T10:15:30Z"), a.appointmentDatetime());
-        assertNull(a.locationId());
+        assertNull(a.locationLabel());
         assertEquals("Follow-up visit", a.appointmentType());
         assertFalse(a.voided());
     }
@@ -109,7 +109,21 @@ class AppointmentFhirMapperTest {
                 patientRef("p1"),
                 new Reference("Location/loc-7"));
 
-        assertEquals("loc-7", mapper.map(appointment).orElseThrow().locationId());
+        assertEquals("loc-7", mapper.map(appointment).orElseThrow().locationLabel());
+    }
+
+    @Test
+    void leestOpenmrsLocatieUitExtension() {
+        Appointment appointment = appointmentMet(
+                "u7",
+                Appointment.AppointmentStatus.BOOKED,
+                Date.from(Instant.parse("2026-01-01T10:00:00Z")),
+                patientRef("p1"),
+                null);
+        OpenmrsFhirAppointmentMetadata.applyTo(appointment, "Poli A - Kamer 1", "Medicijnen meenemen");
+
+        AppointmentPollDto dto = mapper.map(appointment).orElseThrow();
+        assertEquals("Poli A - Kamer 1", dto.locationLabel());
     }
 
     private static Appointment appointmentMet(

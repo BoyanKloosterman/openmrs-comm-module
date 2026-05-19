@@ -31,6 +31,7 @@ public class OpenmrsSchedulingJdbcRepository {
               at.name AS type_name,
               trim(l.uuid) AS location_uuid,
               l.name AS location_name,
+              a.reason,
               (
                 SELECT pa.value
                 FROM person_attribute pa
@@ -92,6 +93,7 @@ public class OpenmrsSchedulingJdbcRepository {
                     rs.getString("type_name"),
                     rs.getString("location_uuid"),
                     rs.getString("location_name"),
+                    rs.getString("reason"),
                     rs.getString("phone"));
 
     private static LocalDateTime toLocalDateTime(Timestamp ts) {

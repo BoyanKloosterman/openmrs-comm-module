@@ -14,6 +14,8 @@ public interface OpenmrsFhirOperations {
 
     Optional<Patient> readPatientByLogicalId(String logicalId);
 
+    Optional<Appointment> readAppointmentByLogicalId(String logicalId);
+
     List<Appointment> searchAppointmentsBetween(Instant from, Instant to);
 
     void upsertPatient(Patient patient);

@@ -1,6 +1,7 @@
 package nl.openmrs.comm_module.notification;
 
 import nl.openmrs.comm_module.config.NotificationSchedulerProperties;
+import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
 import nl.openmrs.comm_module.messaging.queue.RabbitMqProducer;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.notification.persistence.NotificationDeliveryLogRepository;
@@ -22,8 +23,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -58,6 +61,9 @@ class AppointmentReminderSchedulingIntegrationTest {
     @MockitoBean
     private Clock clock;
 
+    @MockitoBean
+    private OpenmrsFhirOperations fhirOperations;
+
     @Autowired
     private PolledAppointmentRepository polledAppointmentRepository;
 
@@ -77,6 +83,7 @@ class AppointmentReminderSchedulingIntegrationTest {
     void fixedClock() {
         when(clock.instant()).thenReturn(NOW);
         when(clock.getZone()).thenReturn(ZoneOffset.UTC);
+        when(fhirOperations.readAppointmentByLogicalId(anyString())).thenReturn(Optional.empty());
     }
 
     @Test

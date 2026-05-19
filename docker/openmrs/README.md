@@ -143,4 +143,6 @@ Keten na boeken in Legacy UI:
 
 Instellingen in `.env`: `OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=true`, zone `OPENMRS_SCHEDULING_SYNC_ZONE=Europe/Amsterdam` (08:00 UI = lokale tijd). Zonder telefoon op de patiënt: `OPENMRS_SCHEDULING_SYNC_FALLBACK_PHONE` (alleen test).
 
+**Locatie en instructies in SMS:** sync exporteert `location.name` (polikliniek/kamer) en **`reason`** (vrije tekst) naar FHIR. Poll slaat locatie op in `polled_appointment`; bij de SMS wordt `reason` opnieuw van HAPI gelezen. Zonder `reason`: afspraaktype + `COMM_NOTIFICATION_DEFAULT_INSTRUCTIONS`.
+
 Zie `docs/docker-scheduling-test.md` voor de FHIR-testketen.

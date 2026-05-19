@@ -18,10 +18,25 @@ public record OpenmrsSchedulingAppointmentRow(
         String appointmentTypeName,
         String locationUuid,
         String locationName,
+        String reason,
         String phone) {
 
     public String syncToken() {
-        return status + "|" + voided + "|" + startDate + "|" + endDate;
+        return status
+                + "|"
+                + voided
+                + "|"
+                + startDate
+                + "|"
+                + endDate
+                + "|"
+                + nullToEmpty(locationName)
+                + "|"
+                + nullToEmpty(reason);
+    }
+
+    private static String nullToEmpty(String s) {
+        return s == null ? "" : s.trim();
     }
 
     public String fhirPatientId() {

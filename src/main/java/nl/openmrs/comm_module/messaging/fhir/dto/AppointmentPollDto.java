@@ -7,6 +7,7 @@ public record AppointmentPollDto(
         String appointmentId,
         String patientId,
         Instant appointmentDatetime,
-        String locationId,
+        /** Leesbare locatie (polikliniek/kamer), geen FHIR Location-id. */
+        String locationLabel,
         String appointmentType,
         boolean voided) {}

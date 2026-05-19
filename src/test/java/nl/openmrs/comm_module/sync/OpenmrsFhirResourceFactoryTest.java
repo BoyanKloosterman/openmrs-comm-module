@@ -1,6 +1,7 @@
 package nl.openmrs.comm_module.sync;
 
 import nl.openmrs.comm_module.config.OpenmrsSchedulingSyncProperties;
+import nl.openmrs.comm_module.messaging.fhir.OpenmrsFhirAppointmentMetadata;
 import org.hl7.fhir.r5.model.Appointment;
 import org.hl7.fhir.r5.model.Patient;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,12 +52,41 @@ class OpenmrsFhirResourceFactoryTest {
                 "Consult",
                 "loc-uuid",
                 "Unknown",
+                null,
                 null);
 
         Appointment appointment = factory.buildAppointment(row, properties);
         ZonedDateTime expected = ZonedDateTime.of(2026, 5, 20, 8, 0, 0, 0, ZoneId.of("Europe/Amsterdam"));
         assertEquals(expected.toInstant(), appointment.getStart().toInstant());
         assertEquals(Appointment.AppointmentStatus.BOOKED, appointment.getStatus());
+    }
+
+    @Test
+    void exporteertLocatieEnReasonNaarFhirMetadata() {
+        OpenmrsSchedulingAppointmentRow row = new OpenmrsSchedulingAppointmentRow(
+                2,
+                "appt-uuid",
+                "SCHEDULED",
+                false,
+                null,
+                3,
+                "uuid-1",
+                "Boyan",
+                "Kloosd",
+                LocalDateTime.of(2026, 5, 20, 8, 0),
+                LocalDateTime.of(2026, 5, 20, 9, 0),
+                "Consult",
+                "loc-uuid",
+                "Polikliniek Hart - Kamer 2",
+                "Nuchter blijven",
+                null);
+
+        Appointment appointment = factory.buildAppointment(row, properties);
+
+        assertEquals(
+                "Polikliniek Hart - Kamer 2",
+                OpenmrsFhirAppointmentMetadata.readLocationDisplay(appointment));
+        assertEquals("Nuchter blijven", OpenmrsFhirAppointmentMetadata.readReason(appointment));
     }
 
     private static OpenmrsSchedulingAppointmentRow row(int id, String status, boolean voided) {
@@ -75,6 +105,7 @@ class OpenmrsFhirResourceFactoryTest {
                 "Consult",
                 "loc-uuid",
                 "Unknown",
+                null,
                 null);
     }
 }

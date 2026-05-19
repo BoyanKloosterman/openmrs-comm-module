@@ -46,6 +46,27 @@ public class OpenmrsFhirClient implements OpenmrsFhirOperations {
         return metadata.getSoftware().getName() + " " + metadata.getSoftware().getVersion();
     }
 
+    /** Haalt Appointment op id; leeg bij 404 of lege id. */
+    public Optional<Appointment> readAppointmentByLogicalId(String logicalId) {
+        if (logicalId == null || logicalId.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            Appointment appointment = client.read()
+                    .resource(Appointment.class)
+                    .withId(logicalId.trim())
+                    .execute();
+            return Optional.ofNullable(appointment);
+        } catch (ResourceNotFoundException e) {
+            return Optional.empty();
+        } catch (BaseServerResponseException e) {
+            if (e.getStatusCode() == 404) {
+                return Optional.empty();
+            }
+            throw e;
+        }
+    }
+
     /** Haalt Patient op id; leeg bij 404 of lege id. */
     public Optional<Patient> readPatientByLogicalId(String logicalId) {
         if (logicalId == null || logicalId.isBlank()) {

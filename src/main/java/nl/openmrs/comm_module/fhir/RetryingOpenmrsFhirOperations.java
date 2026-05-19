@@ -43,6 +43,11 @@ public class RetryingOpenmrsFhirOperations implements OpenmrsFhirOperations {
     }
 
     @Override
+    public Optional<Appointment> readAppointmentByLogicalId(String logicalId) {
+        return executeWithRetry("read Appointment", () -> delegate.readAppointmentByLogicalId(logicalId));
+    }
+
+    @Override
     public List<Appointment> searchAppointmentsBetween(Instant from, Instant to) {
         return executeWithRetry("search Appointment", () -> delegate.searchAppointmentsBetween(from, to));
     }

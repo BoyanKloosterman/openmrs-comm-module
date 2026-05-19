@@ -58,6 +58,7 @@ class JpaAppointmentPollPersistenceTest {
         PolledAppointmentEntity a = all.get(0);
         assertEquals("org-a", a.getOrganisationId());
         assertEquals("consult", a.getAppointmentType());
+        assertEquals("loc-1", a.getLocationId());
         assertEquals("+31612345678", a.getPatientPhone());
     }
 
@@ -69,14 +70,14 @@ class JpaAppointmentPollPersistenceTest {
         persistence.upsertPollResults("org-b", List.of(new AppointmentWithPatientDto(first, null)));
 
         PatientPollDto patient = new PatientPollDto("pat-9", "P", "+31111");
-        AppointmentPollDto second =
-                new AppointmentPollDto("uuid-1", "apt-9", "pat-9", t2, "loc-x", "nieuw", true);
+        AppointmentPollDto second = new AppointmentPollDto("uuid-1", "apt-9", "pat-9", t2, "loc-x", "nieuw", true);
         persistence.upsertPollResults("org-b", List.of(new AppointmentWithPatientDto(second, patient)));
 
         Optional<PolledAppointmentEntity> stored =
                 repository.findByOrganisationIdAndAppointmentFhirId("org-b", "apt-9");
         assertTrue(stored.isPresent());
         assertEquals("nieuw", stored.get().getAppointmentType());
+        assertEquals("loc-x", stored.get().getLocationId());
         assertTrue(stored.get().isVoided());
         assertEquals(t2, stored.get().getAppointmentDatetime());
         assertEquals(1, repository.count());

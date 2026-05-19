@@ -1,6 +1,7 @@
 package nl.openmrs.comm_module.sync;
 
 import nl.openmrs.comm_module.config.OpenmrsSchedulingSyncProperties;
+import nl.openmrs.comm_module.messaging.fhir.OpenmrsFhirAppointmentMetadata;
 import org.hl7.fhir.r5.model.Appointment;
 import org.hl7.fhir.r5.model.CodeableConcept;
 import org.hl7.fhir.r5.model.CodeableReference;
@@ -62,7 +63,8 @@ public class OpenmrsFhirResourceFactory {
         if (row.appointmentTypeName() != null && !row.appointmentTypeName().isBlank()) {
             appointment.addServiceType(new CodeableReference(new CodeableConcept().setText(row.appointmentTypeName())));
         }
-        // Geen Location-participant: HAPI valideert resolve() en Location staat niet op FHIR-server.
+        // Locatie/instructies als metadata (geen Location-resource op HAPI).
+        OpenmrsFhirAppointmentMetadata.applyTo(appointment, row.locationName(), row.reason());
 
         Appointment.AppointmentParticipantComponent patientParticipant =
                 new Appointment.AppointmentParticipantComponent();

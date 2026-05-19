@@ -1,8 +1,11 @@
 package nl.openmrs.comm_module.notification;
 
 import nl.openmrs.comm_module.config.NotificationSchedulerProperties;
+import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
+import nl.openmrs.comm_module.messaging.fhir.OpenmrsFhirAppointmentMetadata;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
+import org.hl7.fhir.r5.model.Appointment;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -24,9 +27,12 @@ public class AppointmentReminderMessageBuilder {
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
     private final NotificationSchedulerProperties schedulerProperties;
+    private final OpenmrsFhirOperations fhirOperations;
 
-    public AppointmentReminderMessageBuilder(NotificationSchedulerProperties schedulerProperties) {
+    public AppointmentReminderMessageBuilder(
+            NotificationSchedulerProperties schedulerProperties, OpenmrsFhirOperations fhirOperations) {
         this.schedulerProperties = schedulerProperties;
+        this.fhirOperations = fhirOperations;
     }
 
     public Optional<NotificationQueueMessage> build24HourReminder(PolledAppointmentEntity appointment) {
@@ -80,6 +86,10 @@ public class AppointmentReminderMessageBuilder {
     }
 
     private String formatInstructions(PolledAppointmentEntity appointment) {
+        String reason = resolveReasonFromFhir(appointment.getAppointmentFhirId());
+        if (reason != null && !reason.isBlank()) {
+            return reason.trim();
+        }
         StringBuilder parts = new StringBuilder();
         String type = appointment.getAppointmentType();
         if (type != null && !type.isBlank()) {
@@ -93,5 +103,15 @@ public class AppointmentReminderMessageBuilder {
             parts.append(defaults.trim());
         }
         return parts.toString();
+    }
+
+    private String resolveReasonFromFhir(String appointmentFhirId) {
+        if (appointmentFhirId == null || appointmentFhirId.isBlank()) {
+            return null;
+        }
+        return fhirOperations
+                .readAppointmentByLogicalId(appointmentFhirId)
+                .map(OpenmrsFhirAppointmentMetadata::readReason)
+                .orElse(null);
     }
 }

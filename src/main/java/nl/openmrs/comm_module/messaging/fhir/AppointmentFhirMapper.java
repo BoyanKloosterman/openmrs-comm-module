@@ -41,7 +41,7 @@ public class AppointmentFhirMapper {
         if (start == null) {
             return Optional.empty();
         }
-        String locationId = resolveLocationId(appointment);
+        String locationLabel = resolveLocationLabel(appointment);
         String typeLabel = resolveTypeLabel(appointment);
         boolean voided = isVoidedStatus(appointment.getStatus());
         return Optional.of(new AppointmentPollDto(
@@ -49,7 +49,7 @@ public class AppointmentFhirMapper {
                 appointmentId,
                 patientId,
                 start,
-                locationId,
+                locationLabel,
                 typeLabel,
                 voided));
     }
@@ -93,12 +93,20 @@ public class AppointmentFhirMapper {
         return start == null ? null : start.toInstant();
     }
 
-    private static String resolveLocationId(Appointment appointment) {
+    private static String resolveLocationLabel(Appointment appointment) {
+        String fromOpenmrs = OpenmrsFhirAppointmentMetadata.readLocationDisplay(appointment);
+        if (fromOpenmrs != null) {
+            return fromOpenmrs;
+        }
         for (Appointment.AppointmentParticipantComponent participant : appointment.getParticipant()) {
             if (!participant.hasActor()) {
                 continue;
             }
-            Optional<String> id = referenceId(participant.getActor(), LOCATION_TYPE);
+            Reference actor = participant.getActor();
+            if (actor.hasDisplay() && !actor.getDisplay().isBlank()) {
+                return actor.getDisplay().trim();
+            }
+            Optional<String> id = referenceId(actor, LOCATION_TYPE);
             if (id.isPresent()) {
                 return id.get();
             }

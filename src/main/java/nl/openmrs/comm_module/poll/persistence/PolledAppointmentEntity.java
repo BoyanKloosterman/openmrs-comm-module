@@ -41,8 +41,9 @@ public class PolledAppointmentEntity {
     @Column(name = "appointment_datetime", nullable = false)
     private Instant appointmentDatetime;
 
+    /** Leesbare locatie (polikliniek/kamer); geen FHIR Location-uuid. */
     @Convert(converter = EncryptedStringConverter.class)
-    @Column(name = "location_id", length = 128)
+    @Column(name = "location_id", length = 512)
     private String locationId;
 
     @Convert(converter = EncryptedStringConverter.class)
