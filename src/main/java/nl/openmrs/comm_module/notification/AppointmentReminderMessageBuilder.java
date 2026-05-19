@@ -2,8 +2,7 @@ package nl.openmrs.comm_module.notification;
 
 import nl.openmrs.comm_module.config.NotificationSchedulerProperties;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
-import nl.openmrs.comm_module.poll.persistence.PolledEncounterEntity;
-import nl.openmrs.comm_module.provider.MessagingProviderType;
+import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -30,17 +29,17 @@ public class AppointmentReminderMessageBuilder {
         this.schedulerProperties = schedulerProperties;
     }
 
-    public Optional<NotificationQueueMessage> build24HourReminder(PolledEncounterEntity encounter) {
-        String phone = encounter.getPatientPhone();
+    public Optional<NotificationQueueMessage> build24HourReminder(PolledAppointmentEntity appointment) {
+        String phone = appointment.getPatientPhone();
         if (phone == null || phone.isBlank()) {
             return Optional.empty();
         }
 
         ZoneId zone = ZoneId.of(schedulerProperties.getReminderZoneId());
-        ZonedDateTime appointment = encounter.getEncounterDatetime().atZone(zone);
+        ZonedDateTime appointmentTime = appointment.getAppointmentDatetime().atZone(zone);
 
         String subject = "Herinnering: afspraak over 24 uur";
-        String body = buildBody(encounter, appointment);
+        String body = buildBody(appointment, appointmentTime);
 
         NotificationQueueMessage message = new NotificationQueueMessage(
                 UUID.randomUUID(),
@@ -50,39 +49,39 @@ public class AppointmentReminderMessageBuilder {
                 schedulerProperties.getDefaultProvider(),
                 MESSAGE_TYPE_24H,
                 Instant.now());
-        message.setEncounterFhirId(encounter.getEncounterFhirId());
+        message.setAppointmentFhirId(appointment.getAppointmentFhirId());
 
         return Optional.of(message);
     }
 
-    private String buildBody(PolledEncounterEntity encounter, ZonedDateTime appointment) {
-        String name = encounter.getPatientDisplayName();
+    private String buildBody(PolledAppointmentEntity appointment, ZonedDateTime appointmentTime) {
+        String name = appointment.getPatientDisplayName();
         String greeting = (name != null && !name.isBlank()) ? "Beste " + name.trim() : "Beste patiënt";
 
         StringBuilder sb = new StringBuilder();
         sb.append(greeting).append(",\n\n");
         sb.append("U heeft over 24 uur een afspraak:\n");
-        sb.append("Datum: ").append(DATE_FORMAT.format(appointment)).append('\n');
-        sb.append("Tijd: ").append(TIME_FORMAT.format(appointment)).append('\n');
-        sb.append("Locatie: ").append(formatLocation(encounter)).append('\n');
-        String instructions = formatInstructions(encounter);
+        sb.append("Datum: ").append(DATE_FORMAT.format(appointmentTime)).append('\n');
+        sb.append("Tijd: ").append(TIME_FORMAT.format(appointmentTime)).append('\n');
+        sb.append("Locatie: ").append(formatLocation(appointment)).append('\n');
+        String instructions = formatInstructions(appointment);
         if (!instructions.isBlank()) {
             sb.append("Instructies: ").append(instructions).append('\n');
         }
         return sb.toString().trim();
     }
 
-    private String formatLocation(PolledEncounterEntity encounter) {
-        String locationId = encounter.getLocationId();
+    private String formatLocation(PolledAppointmentEntity appointment) {
+        String locationId = appointment.getLocationId();
         if (locationId != null && !locationId.isBlank()) {
             return locationId.trim();
         }
         return "nog niet bekend";
     }
 
-    private String formatInstructions(PolledEncounterEntity encounter) {
+    private String formatInstructions(PolledAppointmentEntity appointment) {
         StringBuilder parts = new StringBuilder();
-        String type = encounter.getEncounterType();
+        String type = appointment.getAppointmentType();
         if (type != null && !type.isBlank()) {
             parts.append(type.trim());
         }

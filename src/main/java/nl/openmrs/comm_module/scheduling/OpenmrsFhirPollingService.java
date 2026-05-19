@@ -2,114 +2,117 @@ package nl.openmrs.comm_module.scheduling;
 
 import nl.openmrs.comm_module.config.OpenmrsFhirProperties;
 import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
-import nl.openmrs.comm_module.poll.EncounterPollPersistence;
-import nl.openmrs.comm_module.messaging.fhir.EncounterFhirMapper;
+import nl.openmrs.comm_module.messaging.fhir.AppointmentFhirMapper;
 import nl.openmrs.comm_module.messaging.fhir.PatientFhirMapper;
-import nl.openmrs.comm_module.messaging.fhir.dto.EncounterPollDto;
-import nl.openmrs.comm_module.messaging.fhir.dto.EncounterWithPatientDto;
+import nl.openmrs.comm_module.messaging.fhir.dto.AppointmentPollDto;
+import nl.openmrs.comm_module.messaging.fhir.dto.AppointmentWithPatientDto;
 import nl.openmrs.comm_module.messaging.fhir.dto.PatientPollDto;
-import org.hl7.fhir.r4.model.Bundle;
-import org.hl7.fhir.r4.model.Encounter;
-import org.hl7.fhir.r4.model.Resource;
+import nl.openmrs.comm_module.poll.AppointmentPollPersistence;
+import org.hl7.fhir.r5.model.Appointment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+/** Polling-service: appointments en patient via FHIR R5. */
 @Component
 public class OpenmrsFhirPollingService {
 
     private static final Logger log = LoggerFactory.getLogger(OpenmrsFhirPollingService.class);
+
+    // Bovenkant van het ophaalvenster; tickets verder weg dan dit hoeft de poller niet te zien.
+    private static final long APPOINTMENT_WINDOW_DAYS_AHEAD = 365L;
+
     private final OpenmrsFhirOperations fhirOperations;
-    private final EncounterFhirMapper encounterFhirMapper;
+    private final AppointmentFhirMapper appointmentFhirMapper;
     private final PatientFhirMapper patientFhirMapper;
-    private final EncounterPollPersistence encounterPollPersistence;
+    private final AppointmentPollPersistence appointmentPollPersistence;
     private final OpenmrsFhirProperties fhirProperties;
 
     public OpenmrsFhirPollingService(
             OpenmrsFhirOperations fhirOperations,
-            EncounterFhirMapper encounterFhirMapper,
+            AppointmentFhirMapper appointmentFhirMapper,
             PatientFhirMapper patientFhirMapper,
-            EncounterPollPersistence encounterPollPersistence,
+            AppointmentPollPersistence appointmentPollPersistence,
             OpenmrsFhirProperties fhirProperties) {
         this.fhirOperations = fhirOperations;
-        this.encounterFhirMapper = encounterFhirMapper;
+        this.appointmentFhirMapper = appointmentFhirMapper;
         this.patientFhirMapper = patientFhirMapper;
-        this.encounterPollPersistence = encounterPollPersistence;
+        this.appointmentPollPersistence = appointmentPollPersistence;
         this.fhirProperties = fhirProperties;
     }
 
     @Scheduled(fixedDelayString = "#{@openmrsFhirProperties.pollDelayMillis()}")
     public void pollOpenmrsFhir() {
-        log.debug("FHIR poll gestart");
+        log.debug("OpenMRS FHIR R5 poll gestart");
         try {
             String info = fhirOperations.fetchServerSoftwareNameAndVersion();
             log.info("FHIR server: {}", info);
 
-            String since = LocalDate.now(ZoneOffset.UTC)
-                    .minusDays(Math.max(0, fhirProperties.getEncounterPollSinceDays()))
-                    .toString();
-            Bundle bundle = fhirOperations.searchEncountersSince(since);
-            List<EncounterPollDto> snapshots = mapBundle(bundle);
-            List<EncounterWithPatientDto> withPatients = attachPatients(snapshots);
+            Instant now = Instant.now();
+            Instant from = now.minus(Math.max(0, fhirProperties.getAppointmentPollSinceDays()), ChronoUnit.DAYS);
+            Instant to = now.plus(APPOINTMENT_WINDOW_DAYS_AHEAD, ChronoUnit.DAYS);
+
+            List<Appointment> raw = fhirOperations.searchAppointmentsBetween(from, to);
+            List<AppointmentPollDto> snapshots = mapAppointments(raw);
+            List<AppointmentWithPatientDto> withPatients = attachPatients(snapshots);
 
             long metPatient = withPatients.stream().filter(e -> e.patient() != null).count();
             log.info(
-                    "Encounter-poll: {} bundle-entries, {} encounters, {} met Patient (since={})",
-                    bundle.hasEntry() ? bundle.getEntry().size() : 0,
+                    "Appointment-poll: {} FHIR-entries, {} appointments, {} met Patient (from={}, to={})",
+                    raw.size(),
                     snapshots.size(),
                     metPatient,
-                    since);
+                    from,
+                    to);
 
-            encounterPollPersistence.upsertPollResults(fhirProperties.getOrganisationId(), withPatients);
+            appointmentPollPersistence.upsertPollResults(fhirProperties.getOrganisationId(), withPatients);
         } catch (RuntimeException e) {
-            // Na retries in RetryingOpenmrsFhirOperations: scheduler mag niet crashen
-            log.error("FHIR poll mislukt: {}", e.getMessage(), e);
+            log.error("OpenMRS FHIR poll mislukt ({}): {}",
+                    e.getClass().getSimpleName(), shortMessage(e), e);
         }
     }
 
-    /** Zet bundle entries om naar DTO's; niet-Encounter entries worden overgeslagen. */
-    private List<EncounterPollDto> mapBundle(Bundle bundle) {
-        List<EncounterPollDto> out = new ArrayList<>();
-        if (bundle == null || !bundle.hasEntry()) {
+    private static String shortMessage(Throwable t) {
+        String msg = t.getMessage();
+        if (msg == null) {
+            return "geen detail";
+        }
+        // Voorkomt HTML-blobs (zoals Tomcat 404-pages) in de log; eerste regel + max 200 tekens.
+        String firstLine = msg.split("\\R", 2)[0];
+        return firstLine.length() > 200 ? firstLine.substring(0, 200) + "..." : firstLine;
+    }
+
+    private List<AppointmentPollDto> mapAppointments(List<Appointment> raw) {
+        List<AppointmentPollDto> out = new ArrayList<>();
+        if (raw == null) {
             return out;
         }
-        for (var entry : bundle.getEntry()) {
-            if (entry == null || !entry.hasResource()) {
-                continue;
-            }
-            Resource resource = entry.getResource();
-            if (!(resource instanceof Encounter encounter)) {
-                continue;
-            }
-            encounterFhirMapper.mapEncounterToEncounterPollDto(encounter).ifPresent(out::add);
+        for (Appointment appointment : raw) {
+            appointmentFhirMapper.map(appointment).ifPresent(out::add);
         }
         return out;
     }
 
-    /**
-     * Haalt per unieke patientId één keer de Patient op (FHIR read) en koppelt aan encounter.
-     * Bij ontbrekende Patient: patient=null en warn-log.
-     */
-    private List<EncounterWithPatientDto> attachPatients(List<EncounterPollDto> encounters) {
+    private List<AppointmentWithPatientDto> attachPatients(List<AppointmentPollDto> appointments) {
         Map<String, Optional<PatientPollDto>> cache = new HashMap<>();
-        List<EncounterWithPatientDto> out = new ArrayList<>(encounters.size());
-        for (EncounterPollDto enc : encounters) {
-            String pid = enc.patientId();
+        List<AppointmentWithPatientDto> out = new ArrayList<>(appointments.size());
+        for (AppointmentPollDto apt : appointments) {
+            String pid = apt.patientId();
             Optional<PatientPollDto> patientOpt = cache.computeIfAbsent(pid, this::loadPatientPollDto);
             PatientPollDto patient = patientOpt.orElse(null);
             if (patient == null) {
-                log.warn("Patient niet geladen voor encounter {} (patientId={})", enc.encounterId(), pid);
+                log.warn("Patient niet geladen voor appointment {} (patientId={})", apt.appointmentId(), pid);
             }
-            out.add(new EncounterWithPatientDto(enc, patient));
+            out.add(new AppointmentWithPatientDto(apt, patient));
         }
         return out;
     }

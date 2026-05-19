@@ -14,8 +14,8 @@ public class NotificationQueueMessage {
     private MessagingProviderType provider;
     private String messageType;
     private Instant queuedAt;
-    /** Koppeling naar polled encounter (geen PII in delivery log). */
-    private String encounterFhirId;
+    /** Koppeling naar polled appointment (geen PII in delivery log). */
+    private String appointmentFhirId;
     private int retryCount;
 
     public NotificationQueueMessage() {
@@ -93,12 +93,12 @@ public class NotificationQueueMessage {
         this.queuedAt = queuedAt;
     }
 
-    public String getEncounterFhirId() {
-        return encounterFhirId;
+    public String getAppointmentFhirId() {
+        return appointmentFhirId;
     }
 
-    public void setEncounterFhirId(String encounterFhirId) {
-        this.encounterFhirId = encounterFhirId;
+    public void setAppointmentFhirId(String appointmentFhirId) {
+        this.appointmentFhirId = appointmentFhirId;
     }
 
     public int getRetryCount() {

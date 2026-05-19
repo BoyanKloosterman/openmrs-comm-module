@@ -2,8 +2,8 @@ package nl.openmrs.comm_module.fhir;
 
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import nl.openmrs.comm_module.config.OpenmrsFhirProperties;
-import org.hl7.fhir.r4.model.Bundle;
-import org.hl7.fhir.r4.model.Patient;
+import org.hl7.fhir.r5.model.Appointment;
+import org.hl7.fhir.r5.model.Patient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Primary;
@@ -11,11 +11,12 @@ import org.springframework.stereotype.Component;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
  * Retry rond ruwe {@link OpenmrsFhirClient} (US-003-7); alleen tijdelijke fouten.
- * Decorator houdt polling los van HAPI-details.
  */
 @Component
 @Primary
@@ -37,13 +38,13 @@ public class RetryingOpenmrsFhirOperations implements OpenmrsFhirOperations {
     }
 
     @Override
-    public Bundle searchEncountersSince(String isoDate) {
-        return executeWithRetry("search Encounters", () -> delegate.searchEncountersSince(isoDate));
+    public Optional<Patient> readPatientByLogicalId(String logicalId) {
+        return executeWithRetry("read Patient", () -> delegate.readPatientByLogicalId(logicalId));
     }
 
     @Override
-    public Optional<Patient> readPatientByLogicalId(String logicalId) {
-        return executeWithRetry("read Patient", () -> delegate.readPatientByLogicalId(logicalId));
+    public List<Appointment> searchAppointmentsBetween(Instant from, Instant to) {
+        return executeWithRetry("search Appointment", () -> delegate.searchAppointmentsBetween(from, to));
     }
 
     @FunctionalInterface

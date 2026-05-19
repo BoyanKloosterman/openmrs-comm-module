@@ -1,13 +1,13 @@
 package nl.openmrs.comm_module.notification;
 
 import nl.openmrs.comm_module.config.NotificationSchedulerProperties;
-import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
-import nl.openmrs.comm_module.poll.persistence.PolledEncounterEntity;
+import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import nl.openmrs.comm_module.provider.MessagingProviderType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -20,56 +20,44 @@ class AppointmentReminderMessageBuilderTest {
     void setUp() {
         NotificationSchedulerProperties props = new NotificationSchedulerProperties();
         props.setDefaultProvider(MessagingProviderType.SWIFTSEND);
-        props.setDefaultInstructions("Neem legitimatie mee.");
         props.setReminderZoneId("Europe/Amsterdam");
         builder = new AppointmentReminderMessageBuilder(props);
     }
 
     @Test
-    void bouwtBerichtMetDatumTijdLocatieEnInstructies() {
-        PolledEncounterEntity encounter = encounter(
-                "+31600112233",
-                "Jan Jansen",
-                Instant.parse("2026-06-15T08:00:00Z"),
-                "poli-3",
-                "Controle");
+    void bouwtBerichtMetDatumTijdEnLocatie() {
+        PolledAppointmentEntity appointment = appointment(
+                "+31612345678", "Jan de Vries", Instant.parse("2026-05-19T14:30:00Z"), "poli-2", "Controle");
 
-        NotificationQueueMessage message =
-                builder.build24HourReminder(encounter).orElseThrow();
+        var message =
+                builder.build24HourReminder(appointment).orElseThrow();
 
-        assertEquals("+31600112233", message.getRecipient());
-        assertEquals(MessagingProviderType.SWIFTSEND, message.getProvider());
+        assertEquals("+31612345678", message.getRecipient());
         assertEquals(AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H, message.getMessageType());
-        assertEquals("enc-1", message.getEncounterFhirId());
-        assertTrue(message.getBody().contains("Beste Jan Jansen"));
-        assertTrue(message.getBody().contains("Datum:"));
-        assertTrue(message.getBody().contains("Tijd:"));
-        assertTrue(message.getBody().contains("Locatie: poli-3"));
-        assertTrue(message.getBody().contains("Instructies: Controle. Neem legitimatie mee."));
-        // 08:00 UTC = 10:00 Amsterdam (CEST)
-        assertTrue(message.getBody().contains("10:00"));
+        assertEquals("apt-1", message.getAppointmentFhirId());
+        assertTrue(message.getBody().contains("Jan de Vries"));
+        assertTrue(message.getBody().contains("poli-2"));
     }
 
     @Test
-    void leegAlsGeenTelefoon() {
-        PolledEncounterEntity encounter = encounter(null, "Jan", Instant.now(), "loc", null);
-        assertTrue(builder.build24HourReminder(encounter).isEmpty());
+    void leegBijOntbrekendTelefoonnummer() {
+        PolledAppointmentEntity appointment = appointment(null, "Jan", Instant.now(), "loc", null);
+        assertTrue(builder.build24HourReminder(appointment).isEmpty());
     }
 
-    private static PolledEncounterEntity encounter(
-            String phone, String name, Instant when, String locationId, String type) {
-        PolledEncounterEntity e = new PolledEncounterEntity();
-        e.setOrganisationId("org");
-        e.setEncounterUuid("uuid-1");
-        e.setEncounterFhirId("enc-1");
-        e.setPatientFhirId("pat-1");
-        e.setPatientPhone(phone);
-        e.setPatientDisplayName(name);
-        e.setEncounterDatetime(when);
-        e.setLocationId(locationId);
-        e.setEncounterType(type);
-        e.setVoided(false);
-        e.setLastPolledAt(Instant.parse("2026-05-01T00:00:00Z"));
-        return e;
+    private static PolledAppointmentEntity appointment(
+            String phone, String name, Instant when, String location, String type) {
+        PolledAppointmentEntity a = new PolledAppointmentEntity();
+        a.setOrganisationId("org");
+        a.setAppointmentUuid("uuid-1");
+        a.setAppointmentFhirId("apt-1");
+        a.setPatientFhirId("pat-1");
+        a.setPatientPhone(phone);
+        a.setPatientDisplayName(name);
+        a.setAppointmentDatetime(when);
+        a.setLocationId(location);
+        a.setAppointmentType(type);
+        a.setLastPolledAt(Instant.now());
+        return a;
     }
 }

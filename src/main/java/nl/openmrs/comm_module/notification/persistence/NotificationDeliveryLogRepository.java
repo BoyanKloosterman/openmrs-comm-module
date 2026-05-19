@@ -6,5 +6,5 @@ import java.util.UUID;
 
 public interface NotificationDeliveryLogRepository extends JpaRepository<NotificationDeliveryLogEntity, Long> {
 
-    boolean existsByEncounterFhirIdAndMessageTypeAndSuccessfulTrue(String encounterFhirId, String messageType);
+    boolean existsByAppointmentFhirIdAndMessageTypeAndSuccessfulTrue(String appointmentFhirId, String messageType);
 }

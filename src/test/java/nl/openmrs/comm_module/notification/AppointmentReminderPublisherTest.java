@@ -2,8 +2,7 @@ package nl.openmrs.comm_module.notification;
 
 import nl.openmrs.comm_module.messaging.queue.RabbitMqProducer;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
-import nl.openmrs.comm_module.poll.persistence.PolledEncounterEntity;
-import nl.openmrs.comm_module.provider.MessagingProviderType;
+import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -40,8 +39,8 @@ class AppointmentReminderPublisherTest {
 
     @Test
     void publiceertAlleenGeldigeBerichten() {
-        PolledEncounterEntity withPhone = encounter("enc-a");
-        PolledEncounterEntity noPhone = encounter("enc-b");
+        PolledAppointmentEntity withPhone = appointment("apt-a");
+        PolledAppointmentEntity noPhone = appointment("apt-b");
         NotificationQueueMessage msg = new NotificationQueueMessage();
         msg.setNotificationId(java.util.UUID.randomUUID());
 
@@ -60,7 +59,7 @@ class AppointmentReminderPublisherTest {
 
     @Test
     void slaatBegonnenAfspraakOver() {
-        PolledEncounterEntity started = encounter("enc-started");
+        PolledAppointmentEntity started = appointment("apt-started");
         when(eligibilityService.maySend24HourReminder(started)).thenReturn(false);
 
         assertEquals(0, publisher.publish24HourReminders(List.of(started)));
@@ -72,12 +71,12 @@ class AppointmentReminderPublisherTest {
 
     @Test
     void slaatOverBijEerderSuccesvolVerstuurd() {
-        PolledEncounterEntity enc = encounter("enc-done");
-        when(eligibilityService.maySend24HourReminder(enc)).thenReturn(true);
-        when(deliveryLogService.hasSuccessfulDelivery("enc-done", AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H))
+        PolledAppointmentEntity apt = appointment("apt-done");
+        when(eligibilityService.maySend24HourReminder(apt)).thenReturn(true);
+        when(deliveryLogService.hasSuccessfulDelivery("apt-done", AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H))
                 .thenReturn(true);
 
-        assertEquals(0, publisher.publish24HourReminders(List.of(enc)));
+        assertEquals(0, publisher.publish24HourReminders(List.of(apt)));
 
         verify(messageBuilder, never()).build24HourReminder(any());
         verify(rabbitMqProducer, never()).publish(any());
@@ -89,14 +88,14 @@ class AppointmentReminderPublisherTest {
         verify(rabbitMqProducer, never()).publish(any());
     }
 
-    private static PolledEncounterEntity encounter(String fhirId) {
-        PolledEncounterEntity e = new PolledEncounterEntity();
-        e.setEncounterFhirId(fhirId);
-        e.setEncounterUuid("uuid-" + fhirId);
-        e.setOrganisationId("org");
-        e.setPatientFhirId("pat");
-        e.setEncounterDatetime(Instant.now());
-        e.setLastPolledAt(Instant.now());
-        return e;
+    private static PolledAppointmentEntity appointment(String fhirId) {
+        PolledAppointmentEntity a = new PolledAppointmentEntity();
+        a.setAppointmentFhirId(fhirId);
+        a.setAppointmentUuid("uuid-" + fhirId);
+        a.setOrganisationId("org");
+        a.setPatientFhirId("pat");
+        a.setAppointmentDatetime(Instant.now());
+        a.setLastPolledAt(Instant.now());
+        return a;
     }
 }

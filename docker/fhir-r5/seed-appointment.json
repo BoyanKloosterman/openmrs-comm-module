@@ -1,0 +1,8 @@
+{
+  "resourceType": "Appointment",
+  "id": "apt-docker-1",
+  "status": "booked",
+  "start": "2026-05-20T11:00:00Z",
+  "subject": { "reference": "Patient/patient-docker-1" },
+  "serviceType": [{ "concept": { "text": "Controle" } }]
+}

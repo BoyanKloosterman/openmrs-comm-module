@@ -1,6 +1,6 @@
 package nl.openmrs.comm_module.notification;
 
-import nl.openmrs.comm_module.poll.persistence.PolledEncounterEntity;
+import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -25,8 +25,8 @@ public class DefaultDueNotificationProcessor implements DueNotificationProcessor
 
     @Override
     public void processDueNotifications() {
-        List<PolledEncounterEntity> due =
-                appointmentReminderQueryService.findEncountersDueFor24HourReminder();
+        List<PolledAppointmentEntity> due =
+                appointmentReminderQueryService.findAppointmentsDueFor24HourReminder();
         int queued = appointmentReminderPublisher.publish24HourReminders(due);
         log.info("24u-herinnering: {} in venster, {} op queue gezet", due.size(), queued);
     }

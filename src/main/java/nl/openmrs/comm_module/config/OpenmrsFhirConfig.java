@@ -6,13 +6,13 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-// FHIR R4 context voor HAPI (parser, client-helper)
+// FHIR R5 context voor HAPI (parser, client)
 @Configuration
 public class OpenmrsFhirConfig {
 
-    @Bean("fhirContextR4")
-    public FhirContext fhirContextR4() {
-        FhirContext ctx = FhirContext.forR4();
+    @Bean("fhirContextR5")
+    public FhirContext fhirContextR5() {
+        FhirContext ctx = FhirContext.forR5();
         ApacheRestfulClientFactory clientFactory = new ApacheRestfulClientFactory(ctx);
         CloseableHttpClient httpClient = OpenmrsFhirTlsApacheHttpClient.create();
         clientFactory.setHttpClient(httpClient);
@@ -20,4 +20,3 @@ public class OpenmrsFhirConfig {
         return ctx;
     }
 }
-

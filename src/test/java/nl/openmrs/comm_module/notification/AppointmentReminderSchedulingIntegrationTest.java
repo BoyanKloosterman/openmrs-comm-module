@@ -4,8 +4,8 @@ import nl.openmrs.comm_module.config.NotificationSchedulerProperties;
 import nl.openmrs.comm_module.messaging.queue.RabbitMqProducer;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.notification.persistence.NotificationDeliveryLogRepository;
-import nl.openmrs.comm_module.poll.persistence.PolledEncounterEntity;
-import nl.openmrs.comm_module.poll.persistence.PolledEncounterRepository;
+import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
+import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
 import nl.openmrs.comm_module.messaging.queue.RabbitMqConsumer;
 import nl.openmrs.comm_module.scheduling.NotificationScheduler;
 import nl.openmrs.comm_module.scheduling.OpenmrsFhirPollingService;
@@ -29,10 +29,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * US-001-6: integratietest van de volledige 24u-schedulingketen (001-1 t/m 001-5).
- * Unit-tests per component staan in de bijbehorende *Test-klassen.
- */
 @SpringBootTest
 @Transactional
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
@@ -63,7 +59,7 @@ class AppointmentReminderSchedulingIntegrationTest {
     private Clock clock;
 
     @Autowired
-    private PolledEncounterRepository polledEncounterRepository;
+    private PolledAppointmentRepository polledAppointmentRepository;
 
     @Autowired
     private NotificationDeliveryLogRepository deliveryLogRepository;
@@ -84,15 +80,15 @@ class AppointmentReminderSchedulingIntegrationTest {
     }
 
     @Test
-    void processorZetEncounterIn24uVensterOpQueue() {
-        saveDueEncounter("enc-flow", "+31611112222");
+    void processorZetAppointmentIn24uVensterOpQueue() {
+        saveDueAppointment("apt-flow", "+31611112222");
 
         dueNotificationProcessor.processDueNotifications();
 
         ArgumentCaptor<NotificationQueueMessage> captor = ArgumentCaptor.forClass(NotificationQueueMessage.class);
         verify(rabbitMqProducer).publish(captor.capture());
         NotificationQueueMessage msg = captor.getValue();
-        assertEquals("enc-flow", msg.getEncounterFhirId());
+        assertEquals("apt-flow", msg.getAppointmentFhirId());
         assertEquals(AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H, msg.getMessageType());
         assertEquals(1, deliveryLogRepository.count());
         assertEquals(NotificationDeliveryLogService.STATUS_QUEUED, deliveryLogRepository.findAll().get(0).getStatus());
@@ -100,7 +96,7 @@ class AppointmentReminderSchedulingIntegrationTest {
 
     @Test
     void tweedeSchedulerTickQueueNietOpnieuwNaEerstePoging() {
-        saveDueEncounter("enc-dedup", "+31633334444");
+        saveDueAppointment("apt-dedup", "+31633334444");
         schedulerProperties.setEnabled(true);
 
         notificationScheduler.checkDueNotifications();
@@ -112,25 +108,25 @@ class AppointmentReminderSchedulingIntegrationTest {
     @Test
     void schedulerTickMetUitgeschakeldeSchedulerQueueNiets() {
         schedulerProperties.setEnabled(false);
-        saveDueEncounter("enc-off", "+31655556666");
+        saveDueAppointment("apt-off", "+31655556666");
 
         notificationScheduler.checkDueNotifications();
 
         verify(rabbitMqProducer, never()).publish(org.mockito.ArgumentMatchers.any());
     }
 
-    private void saveDueEncounter(String encounterFhirId, String phone) {
-        PolledEncounterEntity e = new PolledEncounterEntity();
-        e.setOrganisationId("test-org");
-        e.setEncounterUuid("uuid-" + encounterFhirId);
-        e.setEncounterFhirId(encounterFhirId);
-        e.setPatientFhirId("pat-" + encounterFhirId);
-        e.setEncounterDatetime(Instant.parse("2026-05-19T10:05:00Z"));
-        e.setPatientPhone(phone);
-        e.setPatientDisplayName("Test");
-        e.setLocationId("poli-1");
-        e.setVoided(false);
-        e.setLastPolledAt(NOW);
-        polledEncounterRepository.save(e);
+    private void saveDueAppointment(String appointmentFhirId, String phone) {
+        PolledAppointmentEntity a = new PolledAppointmentEntity();
+        a.setOrganisationId("test-org");
+        a.setAppointmentUuid("uuid-" + appointmentFhirId);
+        a.setAppointmentFhirId(appointmentFhirId);
+        a.setPatientFhirId("pat-" + appointmentFhirId);
+        a.setAppointmentDatetime(Instant.parse("2026-05-19T10:05:00Z"));
+        a.setPatientPhone(phone);
+        a.setPatientDisplayName("Test");
+        a.setLocationId("poli-1");
+        a.setVoided(false);
+        a.setLastPolledAt(NOW);
+        polledAppointmentRepository.save(a);
     }
 }

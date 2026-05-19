@@ -1,0 +1,21 @@
+# Standalone HAPI FHIR JPA — FHIR R5 (HL7 Appointment)
+spring:
+  main:
+    # Vereist voor HAPI 8.x + R5 (zie hapifhir/hapi-fhir#6013)
+    allow-circular-references: true
+
+# Snellere eerste start in Docker (geen Elasticsearch/MDM)
+elasticsearch:
+  enabled: false
+
+hapi:
+  fhir:
+    fhir_version: R5
+    allow_cascading_deletes: true
+    allow_contains_searches: true
+    mdm_enabled: false
+    subscription:
+      resthook_enabled: false
+      email:
+        enabled: false
+      websocket_enabled: false

@@ -35,19 +35,21 @@
 | 002-3 | Check inbouwen: niet versturen als afspraak al begonnen is | Backend | 0.5d | feature/US-002-herinnering-1u |
 | 002-4 | Unit tests schrijven voor 1-uurs scheduling | Test | 0.5d | feature/US-002-herinnering-1u |
 
-### US-003 — Afspraakdata ophalen uit OpenMRS via FHIR polling
+### US-003 — Afspraakdata ophalen uit OpenMRS (FHIR R5)
+
+> Afspraken en patiënten via FHIR R5 HL7 (`Appointment` + `Patient`); standalone HAPI-server, geen OpenMRS FHIR2/Bahmni.
 
 | # | Taak | Type | Dag | Branch |
 |---|------|------|-----|--------|
-| 003-1 | HAPI FHIR dependency toevoegen aan pom.xml | Config | 0.5d | feature/US-003-fhir-polling |
-| 003-2 | FHIR client opzetten die verbinding maakt met OpenMRS FHIR API | Backend | 0.5d | feature/US-003-fhir-polling |
-| 003-3 | Polling-service schrijven met @Scheduled die elke X minuten draait | Backend | 0.5d | feature/US-003-fhir-polling |
-| 003-4 | FHIR **Encounter** (OpenMRS FHIR2) parsen naar eigen poll-DTO — geen Appointment op deze stack | Backend | 1d | feature/US-003-fhir-polling |
-| 003-5 | Patient-resource ophalen (FHIR read) en koppelen aan encounter-poll (`EncounterWithPatientDto`) | Backend | 0.5d | feature/US-003-fhir-polling |
+| 003-1 | HAPI FHIR R5 dependencies in pom.xml | Config | 0.5d | feature/US-003-fhir-polling |
+| 003-2 | FHIR-client (HAPI) voor Appointment search + Patient read opzetten | Backend | 0.5d | feature/US-003-fhir-polling |
+| 003-3 | Polling-service met @Scheduled die elke X minuten draait | Backend | 0.5d | feature/US-003-fhir-polling |
+| 003-4 | FHIR R5 Appointment mappen naar poll-DTO (incl. cancelled/noshow → voided) | Backend | 1d | feature/US-003-fhir-polling |
+| 003-5 | Patient-resource via FHIR R5 ophalen en koppelen (`AppointmentWithPatientDto`) | Backend | 0.5d | feature/US-003-fhir-polling |
 | 003-6 | Afspraken opslaan in PostgreSQL via JPA repository | Backend | 0.5d | feature/US-003-fhir-polling |
 | 003-7 | Foutafhandeling: retry bij offline OpenMRS met logging | Backend | 0.5d | feature/US-003-fhir-polling |
-| 003-8 | Polling-interval configureerbaar maken per organisatie via application.properties | Config | 0.5d | feature/US-003-fhir-polling |
-| 003-9 | Unit tests schrijven voor FHIR parser en polling-service | Test | 1d | feature/US-003-fhir-polling |
+| 003-8 | Polling-interval configureerbaar per organisatie via application.properties | Config | 0.5d | feature/US-003-fhir-polling |
+| 003-9 | Unit tests voor FHIR-mapper en polling-service | Test | 1d | feature/US-003-fhir-polling |
 
 ### US-017 — Geen notificatie bij geannuleerde afspraak
 
@@ -118,15 +120,17 @@
 
 ## Luc
 
-### US-009 — FHIR Appointment-resource valideren
+### US-009 — FHIR Patient + OpenMRS REST appointment valideren
+
+> Appointment wordt via OpenMRS REST opgehaald (zie US-003); validatie is daar een lichte presence-check. FHIR-validatie blijft volledig op de Patient-resource.
 
 | # | Taak | Type | Dag | Branch |
 |---|------|------|-----|--------|
-| 009-1 | HAPI FHIR validator configureren voor Appointment-resource | Backend | 0.5d | feature/US-009-fhir-validatie |
-| 009-2 | Validatieservice schrijven die verplichte velden controleert | Backend | 1d | feature/US-009-fhir-validatie |
-| 009-3 | Ongeldige berichten weigeren en fout loggen | Backend | 0.5d | feature/US-009-fhir-validatie |
-| 009-4 | Geldige berichten doorgeven aan schedulinglaag | Backend | 0.5d | feature/US-009-fhir-validatie |
-| 009-5 | Unit tests schrijven voor validatie met geldige en ongeldige FHIR-resources | Test | 1d | feature/US-009-fhir-validatie |
+| 009-1 | HAPI FHIR validator configureren voor Patient-resource | Backend | 0.5d | feature/US-009-fhir-validatie |
+| 009-2 | Validatieservice schrijven die verplichte FHIR Patient-velden controleert | Backend | 1d | feature/US-009-fhir-validatie |
+| 009-3 | Ongeldige FHIR Patient-resources weigeren en fout loggen | Backend | 0.5d | feature/US-009-fhir-validatie |
+| 009-4 | Presence-check op FHIR R5 Appointment (id, start, patient-referentie) | Backend | 0.5d | feature/US-009-fhir-validatie |
+| 009-5 | Unit tests voor FHIR Patient-validatie en REST appointment-validatie | Test | 1d | feature/US-009-fhir-validatie |
 
 ### US-010 — ACK en NACK berichten verwerken
 

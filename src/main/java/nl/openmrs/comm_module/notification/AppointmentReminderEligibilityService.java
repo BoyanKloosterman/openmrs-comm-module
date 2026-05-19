@@ -1,6 +1,6 @@
 package nl.openmrs.comm_module.notification;
 
-import nl.openmrs.comm_module.poll.persistence.PolledEncounterEntity;
+import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -16,18 +16,15 @@ public class AppointmentReminderEligibilityService {
         this.clock = clock;
     }
 
-    public boolean maySend24HourReminder(PolledEncounterEntity encounter) {
-        return maySend24HourReminder(encounter, clock.instant());
+    public boolean maySend24HourReminder(PolledAppointmentEntity appointment) {
+        return maySend24HourReminder(appointment, clock.instant());
     }
 
-    /**
-     * Geen herinnering bij geannuleerde (voided) afspraak of als starttijd al is bereikt.
-     */
-    public boolean maySend24HourReminder(PolledEncounterEntity encounter, Instant now) {
-        if (encounter == null || encounter.isVoided()) {
+    public boolean maySend24HourReminder(PolledAppointmentEntity appointment, Instant now) {
+        if (appointment == null || appointment.isVoided()) {
             return false;
         }
-        Instant start = encounter.getEncounterDatetime();
+        Instant start = appointment.getAppointmentDatetime();
         return start != null && start.isAfter(now);
     }
 }

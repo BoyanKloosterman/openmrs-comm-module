@@ -1,11 +1,12 @@
 package nl.openmrs.comm_module.notification;
 
-import nl.openmrs.comm_module.poll.persistence.PolledEncounterEntity;
+import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -18,7 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class AppointmentReminderEligibilityServiceTest {
 
-    private static final Instant NOW = Instant.parse("2026-05-18T12:00:00Z");
+    private static final Instant NOW = Instant.parse("2026-05-18T10:00:00Z");
 
     @Mock
     private Clock clock;
@@ -28,41 +29,38 @@ class AppointmentReminderEligibilityServiceTest {
     @BeforeEach
     void setUp() {
         eligibilityService = new AppointmentReminderEligibilityService(clock);
+        when(clock.instant()).thenReturn(NOW);
     }
 
     @Test
-    void toegestaanAlsAfspraakInToekomst() {
-        when(clock.instant()).thenReturn(NOW);
-        PolledEncounterEntity e = encounter(Instant.parse("2026-05-19T12:00:00Z"), false);
-        assertTrue(eligibilityService.maySend24HourReminder(e));
+    void toekomstigeAfspraakMag() {
+        PolledAppointmentEntity a = appointment(Instant.parse("2026-05-19T12:00:00Z"), false);
+        assertTrue(eligibilityService.maySend24HourReminder(a));
     }
 
     @Test
-    void geweigerdAlsAfspraakAlBegonnen() {
-        when(clock.instant()).thenReturn(NOW);
-        PolledEncounterEntity e = encounter(Instant.parse("2026-05-18T11:59:00Z"), false);
-        assertFalse(eligibilityService.maySend24HourReminder(e));
+    void afspraakNetVoorNuMagNog() {
+        PolledAppointmentEntity a = appointment(Instant.parse("2026-05-18T11:59:00Z"), false);
+        assertTrue(eligibilityService.maySend24HourReminder(a));
     }
 
     @Test
-    void geweigerdOpExactStartmoment() {
-        when(clock.instant()).thenReturn(NOW);
-        PolledEncounterEntity e = encounter(NOW, false);
-        assertFalse(eligibilityService.maySend24HourReminder(e));
+    void begonnenAfspraakMagNiet() {
+        PolledAppointmentEntity a = appointment(NOW, false);
+        assertFalse(eligibilityService.maySend24HourReminder(a));
     }
 
     @Test
-    void geweigerdAlsVoided() {
-        when(clock.instant()).thenReturn(NOW);
-        PolledEncounterEntity e = encounter(Instant.parse("2026-05-19T12:00:00Z"), true);
-        assertFalse(eligibilityService.maySend24HourReminder(e));
+    void geannuleerdeAfspraakMagNiet() {
+        PolledAppointmentEntity a = appointment(Instant.parse("2026-05-19T12:00:00Z"), true);
+        assertFalse(eligibilityService.maySend24HourReminder(a));
     }
 
-    private static PolledEncounterEntity encounter(Instant start, boolean voided) {
-        PolledEncounterEntity e = new PolledEncounterEntity();
-        e.setEncounterFhirId("enc-1");
-        e.setEncounterDatetime(start);
-        e.setVoided(voided);
-        return e;
+    private static PolledAppointmentEntity appointment(Instant start, boolean voided) {
+        PolledAppointmentEntity a = new PolledAppointmentEntity();
+        a.setAppointmentFhirId("apt-1");
+        a.setAppointmentDatetime(start);
+        a.setVoided(voided);
+        return a;
     }
 }

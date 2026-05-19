@@ -40,6 +40,45 @@ services:
       - comm-network
     restart: unless-stopped
 
+  # Standalone FHIR R5 (HL7 Appointment) — niet OpenMRS FHIR2
+  fhir-r5:
+    # Gebruik latest (Spring Boot), niet latest-tomcat: die kan ROOT.war niet uitpakken (rechten)
+    image: hapiproject/hapi:latest
+    container_name: comm-module-fhir-r5
+    volumes:
+      - ./docker/fhir-r5/application.yaml:/data/hapi/application.yaml:ro
+    environment:
+      SPRING_CONFIG_LOCATION: file:///data/hapi/application.yaml
+    ports:
+      - "8082:8080"
+    # Geen healthcheck: image heeft geen curl; seed/comm-module wachten zelf op metadata
+    networks:
+      - comm-network
+    restart: unless-stopped
+
+  fhir-r5-seed:
+    image: curlimages/curl:8.5.0
+    container_name: comm-module-fhir-r5-seed
+    depends_on:
+      fhir-r5:
+        condition: service_started
+    volumes:
+      - ./docker/fhir-r5:/seed:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        BASE=http://fhir-r5:8080/fhir
+        echo "Wachten op FHIR R5 metadata..."
+        until curl -sf "$$BASE/metadata" >/dev/null; do sleep 10; done
+        curl -sf -X PUT "$$BASE/Patient/patient-docker-1" -H "Content-Type: application/fhir+json" --data-binary @/seed/seed-patient.json
+        curl -sf -X PUT "$$BASE/Appointment/apt-docker-1" -H "Content-Type: application/fhir+json" --data-binary @/seed/seed-appointment.json
+        echo "FHIR R5 seed klaar"
+    networks:
+      - comm-network
+    restart: "no"
+
   openmrs:
     build:
       context: ./docker/openmrs
@@ -109,6 +148,9 @@ services:
         condition: service_healthy
       # OpenMRS wordt pas minuten later "healthy"; comm-module kan al starten en
       # FHIR-calls retrien (Spring health blijft ok). Prometheus/Grafana volgen.
+      # comm-module retried FHIR; mag starten terwijl fhir-r5 nog opstart
+      fhir-r5:
+        condition: service_started
       openmrs:
         condition: service_started
       otel-collector:
@@ -123,12 +165,11 @@ services:
       SPRING_RABBITMQ_PORT: ${SPRING_RABBITMQ_PORT:?Zie .env.example}
       SPRING_RABBITMQ_USERNAME: ${SPRING_RABBITMQ_USERNAME:?Zie .env.example}
       SPRING_RABBITMQ_PASSWORD: ${SPRING_RABBITMQ_PASSWORD:?Zie .env.example}
-      # Basis-URL; FHIR R4: /ws/fhir2/R4 (Encounter i.p.v. Appointment in standaard FHIR2)
+      # FHIR R5 REST-base (HAPI in compose); geen OpenMRS FHIR2-module nodig
       OPENMRS_URL: ${OPENMRS_URL:?Zie .env.example}
-      # Zelfde host/poort als OPENMRS_URL; aparte base voor FHIR REST (Spring leest dit uit env)
       OPENMRS_FHIR_SERVER_URL: ${OPENMRS_FHIR_SERVER_URL:?Zie .env.example}
-      OPENMRS_FHIR_USERNAME: ${OPENMRS_FHIR_USERNAME:?Zie .env.example}
-      OPENMRS_FHIR_PASSWORD: ${OPENMRS_FHIR_PASSWORD:?Zie .env.example}
+      OPENMRS_FHIR_USERNAME: ${OPENMRS_FHIR_USERNAME:-}
+      OPENMRS_FHIR_PASSWORD: ${OPENMRS_FHIR_PASSWORD:-}
       OPENMRS_FHIR_ORGANISATION_ID: ${OPENMRS_FHIR_ORGANISATION_ID:-default}
       OPENMRS_FHIR_POLL_INTERVAL_MINUTES: ${OPENMRS_FHIR_POLL_INTERVAL_MINUTES:-1}
       APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?Zie .env.example}

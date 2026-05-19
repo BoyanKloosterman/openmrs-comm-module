@@ -43,11 +43,11 @@ public class NotificationDeliveryLogService {
                 result.isSuccessful());
     }
 
-    public boolean hasSuccessfulDelivery(String encounterFhirId, String messageType) {
-        if (encounterFhirId == null || encounterFhirId.isBlank() || messageType == null || messageType.isBlank()) {
+    public boolean hasSuccessfulDelivery(String appointmentFhirId, String messageType) {
+        if (appointmentFhirId == null || appointmentFhirId.isBlank() || messageType == null || messageType.isBlank()) {
             return false;
         }
-        return repository.existsByEncounterFhirIdAndMessageTypeAndSuccessfulTrue(encounterFhirId, messageType);
+        return repository.existsByAppointmentFhirIdAndMessageTypeAndSuccessfulTrue(appointmentFhirId, messageType);
     }
 
     private void persist(
@@ -59,7 +59,7 @@ public class NotificationDeliveryLogService {
         Instant attemptedAt = clock.instant();
         NotificationDeliveryLogEntity entry = new NotificationDeliveryLogEntity();
         entry.setNotificationId(message.getNotificationId());
-        entry.setEncounterFhirId(message.getEncounterFhirId());
+        entry.setAppointmentFhirId(message.getAppointmentFhirId());
         entry.setMessageType(message.getMessageType());
         entry.setProvider(message.getProvider() != null ? message.getProvider().name() : "UNKNOWN");
         entry.setStatus(status);
@@ -71,18 +71,18 @@ public class NotificationDeliveryLogService {
 
         if (successful) {
             log.info(
-                    "Verzendstatus {}: notificationId={} encounter={} provider={} providerMsgId={}",
+                    "Verzendstatus {}: notificationId={} appointment={} provider={} providerMsgId={}",
                     status,
                     message.getNotificationId(),
-                    message.getEncounterFhirId(),
+                    message.getAppointmentFhirId(),
                     entry.getProvider(),
                     providerMessageId);
         } else {
             log.warn(
-                    "Verzendstatus {}: notificationId={} encounter={} provider={} fout={}",
+                    "Verzendstatus {}: notificationId={} appointment={} provider={} fout={}",
                     status,
                     message.getNotificationId(),
-                    message.getEncounterFhirId(),
+                    message.getAppointmentFhirId(),
                     entry.getProvider(),
                     entry.getErrorMessage());
         }

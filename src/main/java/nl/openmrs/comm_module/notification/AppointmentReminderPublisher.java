@@ -2,7 +2,7 @@ package nl.openmrs.comm_module.notification;
 
 import nl.openmrs.comm_module.messaging.queue.RabbitMqProducer;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
-import nl.openmrs.comm_module.poll.persistence.PolledEncounterEntity;
+import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -31,28 +31,27 @@ public class AppointmentReminderPublisher {
         this.rabbitMqProducer = rabbitMqProducer;
     }
 
-    /** Aantal berichten dat daadwerkelijk op de queue is gezet. */
-    public int publish24HourReminders(List<PolledEncounterEntity> encounters) {
+    public int publish24HourReminders(List<PolledAppointmentEntity> appointments) {
         int queued = 0;
-        for (PolledEncounterEntity encounter : encounters) {
-            if (!eligibilityService.maySend24HourReminder(encounter)) {
+        for (PolledAppointmentEntity appointment : appointments) {
+            if (!eligibilityService.maySend24HourReminder(appointment)) {
                 log.info(
                         "24u-herinnering overgeslagen voor {}: afspraak al begonnen of geannuleerd",
-                        encounter.getEncounterFhirId());
+                        appointment.getAppointmentFhirId());
                 continue;
             }
             if (deliveryLogService.hasSuccessfulDelivery(
-                    encounter.getEncounterFhirId(), AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H)) {
+                    appointment.getAppointmentFhirId(), AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H)) {
                 log.debug(
                         "24u-herinnering overgeslagen voor {}: al eerder succesvol verstuurd",
-                        encounter.getEncounterFhirId());
+                        appointment.getAppointmentFhirId());
                 continue;
             }
-            var messageOpt = messageBuilder.build24HourReminder(encounter);
+            var messageOpt = messageBuilder.build24HourReminder(appointment);
             if (messageOpt.isEmpty()) {
                 log.warn(
-                        "Geen herinnering voor encounter {}: ontbrekend telefoonnummer",
-                        encounter.getEncounterFhirId());
+                        "Geen herinnering voor appointment {}: ontbrekend telefoonnummer",
+                        appointment.getAppointmentFhirId());
                 continue;
             }
             NotificationQueueMessage message = messageOpt.get();
@@ -60,9 +59,9 @@ public class AppointmentReminderPublisher {
             deliveryLogService.recordQueued(message);
             queued++;
             log.info(
-                    "24u-herinnering in queue: notificationId={} encounter={} naar {}",
+                    "24u-herinnering in queue: notificationId={} appointment={} naar {}",
                     message.getNotificationId(),
-                    encounter.getEncounterFhirId(),
+                    appointment.getAppointmentFhirId(),
                     message.getRecipient());
         }
         return queued;

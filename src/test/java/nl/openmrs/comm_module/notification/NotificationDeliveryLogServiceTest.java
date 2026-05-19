@@ -65,7 +65,7 @@ class NotificationDeliveryLogServiceTest {
         deliveryLogService.recordProviderAttempt(message, ProviderSendResult.success("prov-99"));
 
         assertEquals(2, repository.count());
-        assertTrue(deliveryLogService.hasSuccessfulDelivery("enc-1", AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H));
+        assertTrue(deliveryLogService.hasSuccessfulDelivery("apt-1", AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H));
     }
 
     @Test
@@ -74,7 +74,7 @@ class NotificationDeliveryLogServiceTest {
         deliveryLogService.recordProviderAttempt(message, ProviderSendResult.failed("timeout"));
 
         assertEquals(1, repository.count());
-        assertFalse(deliveryLogService.hasSuccessfulDelivery("enc-1", AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H));
+        assertFalse(deliveryLogService.hasSuccessfulDelivery("apt-1", AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H));
         assertEquals("FAILED", repository.findAll().get(0).getStatus());
     }
 
@@ -87,7 +87,7 @@ class NotificationDeliveryLogServiceTest {
                 MessagingProviderType.SWIFTSEND,
                 AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H,
                 NOW);
-        message.setEncounterFhirId("enc-1");
+        message.setAppointmentFhirId("apt-1");
         return message;
     }
 }

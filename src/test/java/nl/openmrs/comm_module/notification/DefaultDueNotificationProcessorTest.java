@@ -1,6 +1,6 @@
 package nl.openmrs.comm_module.notification;
 
-import nl.openmrs.comm_module.poll.persistence.PolledEncounterEntity;
+import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -27,17 +27,17 @@ class DefaultDueNotificationProcessorTest {
 
     @Test
     void roeptQueryEnPublisherAan() {
-        PolledEncounterEntity encounter = new PolledEncounterEntity();
-        encounter.setEncounterFhirId("enc-1");
-        encounter.setEncounterDatetime(Instant.now());
-        when(appointmentReminderQueryService.findEncountersDueFor24HourReminder())
-                .thenReturn(List.of(encounter));
-        when(appointmentReminderPublisher.publish24HourReminders(List.of(encounter)))
+        PolledAppointmentEntity appointment = new PolledAppointmentEntity();
+        appointment.setAppointmentFhirId("apt-1");
+        appointment.setAppointmentDatetime(Instant.now());
+        when(appointmentReminderQueryService.findAppointmentsDueFor24HourReminder())
+                .thenReturn(List.of(appointment));
+        when(appointmentReminderPublisher.publish24HourReminders(List.of(appointment)))
                 .thenReturn(1);
 
         processor.processDueNotifications();
 
-        verify(appointmentReminderQueryService).findEncountersDueFor24HourReminder();
-        verify(appointmentReminderPublisher).publish24HourReminders(List.of(encounter));
+        verify(appointmentReminderQueryService).findAppointmentsDueFor24HourReminder();
+        verify(appointmentReminderPublisher).publish24HourReminders(List.of(appointment));
     }
 }

@@ -22,8 +22,8 @@ public class NotificationDeliveryLogEntity {
     @Column(name = "notification_id", nullable = false)
     private UUID notificationId;
 
-    @Column(name = "encounter_fhir_id", length = 128)
-    private String encounterFhirId;
+    @Column(name = "appointment_fhir_id", length = 128)
+    private String appointmentFhirId;
 
     @Column(name = "message_type", nullable = false, length = 64)
     private String messageType;
@@ -58,12 +58,12 @@ public class NotificationDeliveryLogEntity {
         this.notificationId = notificationId;
     }
 
-    public String getEncounterFhirId() {
-        return encounterFhirId;
+    public String getAppointmentFhirId() {
+        return appointmentFhirId;
     }
 
-    public void setEncounterFhirId(String encounterFhirId) {
-        this.encounterFhirId = encounterFhirId;
+    public void setAppointmentFhirId(String appointmentFhirId) {
+        this.appointmentFhirId = appointmentFhirId;
     }
 
     public String getMessageType() {
