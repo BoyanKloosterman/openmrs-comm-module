@@ -4,6 +4,8 @@ FROM openmrs/openmrs-core:2.5.14-amazoncorretto-11
 
 USER root
 
+COPY patch-dwr.sh /tmp/patch-dwr.sh
+
 # legacyui 2.0.0/2.1.0 op Maven vereisen inmiddels platform 2.7.3; 1.24.0 werkt op 2.5.14
 ARG LEGACYUI_VERSION=1.24.0
 ARG APPOINTMENTSCHEDULING_VERSION=2.0.0
@@ -30,6 +32,8 @@ RUN mkdir -p /openmrs/distribution/openmrs_modules \
        "${MAVEN_BASE}/webservices.rest-omod/${WEBSERVICES_REST_VERSION}/webservices.rest-omod-${WEBSERVICES_REST_VERSION}.jar" \
   && curl -fL -o /openmrs/distribution/openmrs_modules/appointmentscheduling.omod \
        "${MAVEN_BASE}/appointmentscheduling-omod/${APPOINTMENTSCHEDULING_VERSION}/appointmentscheduling-omod-${APPOINTMENTSCHEDULING_VERSION}.jar" \
+  && sed -i 's/\r$//' /tmp/patch-dwr.sh \
+  && sh /tmp/patch-dwr.sh \
   && chmod a+r /openmrs/distribution/openmrs_modules/*.omod
 
 USER 1001

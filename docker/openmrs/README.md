@@ -87,6 +87,52 @@ Op **OpenMRS 2.7** krijg je op die URLs 404 (`DispatcherServlet.noHandlerFound`)
 
 4. Eerste keer: **Administration → Manage Appointment Scheduling Module** — stel o.a. telefoon person attribute in.
 
+### Demo-rooster (tijdsloten) seeden
+
+OpenMRS toont alleen tijden waarvoor **provider schedule** (tijdsloten) bestaat. Een geboekte afspraak **vult** dat uur; **Find Available Times** slaat volle slots over. De lijst **Appointments** toont alleen echte boekingen, niet “vrije uren”.
+
+```powershell
+cd C:\Users\kloos\Documents\Apps\openmrs-comm-module
+.\docker\openmrs\seed-appointments.ps1
+```
+
+Standaard: **demo-provider** (Super User), type **Consult**, **90 dagen** vanaf vandaag, elk uur **08:00–18:00 UTC**. Optioneel: `-DaysAhead 180 -StartHour 8 -EndHour 18`.
+
+Na nieuwe boekingen hoef je het script niet opnieuw te draaien; wel opnieuw na een **verse database** of als je verder in de toekomst wilt plannen (run het script dan nog eens).
+
+### Formulier: juiste volgorde (anders leeg save-venster)
+
+| Stap | Actie |
+|------|--------|
+| 1 | Patient, **Appointment type**, optioneel locatie/provider |
+| 2 | **Between**: vandaag t/m over ~90 dagen, **overdag** (bijv. 08:00 AM – 06:00 PM) |
+| 3 | **Find Available Times** — er moeten rijen in de tabel verschijnen |
+| 4 | **Klik één rij** (radio/selectie) — provider/locatie/tijd komen uit die rij |
+| 5 | **Save Appointment** → bevestiging moet gevuld zijn → **Save** in het venster |
+
+**Find Time lijkt “niets te doen”** als er geen slot in je datumbereik valt (bijv. zoeken 21–22 mei terwijl slots alleen op 20 mei staan). Het save-venster toont dan lege provider/locatie/datum; de grijze **Save**-knop komt doordat je geen tijdslot hebt geselecteerd.
+
+**DB controleren** (vanuit projectmap):
+
+```powershell
+docker compose exec postgres psql -U openmrs_user -d openmrs -c "SELECT COUNT(*) FROM appointmentscheduling_time_slot;"
+docker compose exec postgres psql -U openmrs_user -d openmrs -c "SELECT COUNT(*) FROM appointmentscheduling_appointment;"
+```
+
+### Datumfilter: `Unparseable date: "05/19/2026 00:00"`
+
+De appointment-pagina’s gebruiken **US-datum** (`mm/dd/yyyy`) in JavaScript, maar bij locale **`en`** vult het formulier de tijd als **`00:00`** (24 uur). De server verwacht dan **`12:00 AM`** — parsing faalt.
+
+**Oplossing (testomgeving):** locale **`en_US`** voor admin + default:
+
+```powershell
+docker compose exec postgres psql -U openmrs_user -d openmrs -c "UPDATE global_property SET property_value = 'en_US' WHERE property = 'default_locale'; UPDATE user_property SET property_value = 'en_US' WHERE user_id = 1 AND property = 'defaultLocale';"
+```
+
+Daarna **uitloggen en opnieuw inloggen**. Datums in filters dan bijv. `05/19/2026 12:00 AM` t/m `05/19/2026 11:59 PM` (via kalender-icoon, niet handmatig `00:00` typen).
+
+In de UI: **My Profile → Default Locale → English (United States)**.
+
 ## Koppeling met comm-module (belangrijk)
 
 De **comm-module pollt FHIR R5** (`fhir-r5` / poort 8082), niet automatisch OpenMRS Appointment Scheduling.
