@@ -135,9 +135,12 @@ In de UI: **My Profile → Default Locale → English (United States)**.
 
 ## Koppeling met comm-module (belangrijk)
 
-De **comm-module pollt FHIR R5** (`fhir-r5` / poort 8082), niet automatisch OpenMRS Appointment Scheduling.
+Keten na boeken in Legacy UI:
 
-- Afspraken in OpenMRS → alleen in OpenMRS DB.
-- Afspraken voor polling/herinneringen → `Patient` + `Appointment` op HAPI (seed of handmatig PUT), of later FHIR2/sync.
+1. **OpenMRS→FHIR sync** (comm-module, elke minuut): `appointmentscheduling_*` → HAPI FHIR (`omrs-appt-{id}`)
+2. **FHIR poll** → `polled_appointment`
+3. **24u-scheduler** → RabbitMQ-queue (bij `COMM_NOTIFICATION_REMINDER_LEAD_HOURS=24`)
+
+Instellingen in `.env`: `OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=true`, zone `OPENMRS_SCHEDULING_SYNC_ZONE=Europe/Amsterdam` (08:00 UI = lokale tijd). Zonder telefoon op de patiënt: `OPENMRS_SCHEDULING_SYNC_FALLBACK_PHONE` (alleen test).
 
 Zie `docs/docker-scheduling-test.md` voor de FHIR-testketen.

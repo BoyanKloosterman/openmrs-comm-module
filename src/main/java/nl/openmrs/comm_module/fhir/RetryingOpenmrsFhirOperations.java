@@ -47,6 +47,22 @@ public class RetryingOpenmrsFhirOperations implements OpenmrsFhirOperations {
         return executeWithRetry("search Appointment", () -> delegate.searchAppointmentsBetween(from, to));
     }
 
+    @Override
+    public void upsertPatient(Patient patient) {
+        executeWithRetry("upsert Patient", () -> {
+            delegate.upsertPatient(patient);
+            return null;
+        });
+    }
+
+    @Override
+    public void upsertAppointment(Appointment appointment) {
+        executeWithRetry("upsert Appointment", () -> {
+            delegate.upsertAppointment(appointment);
+            return null;
+        });
+    }
+
     @FunctionalInterface
     private interface FhirCall<T> {
         T run();

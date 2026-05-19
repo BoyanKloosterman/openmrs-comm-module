@@ -101,4 +101,20 @@ public class OpenmrsFhirClient implements OpenmrsFhirOperations {
         }
         return client.loadPage().next(bundle).execute();
     }
+
+    @Override
+    public void upsertPatient(Patient patient) {
+        if (patient == null || !patient.hasId()) {
+            throw new IllegalArgumentException("Patient zonder id");
+        }
+        client.update().resource(patient).execute();
+    }
+
+    @Override
+    public void upsertAppointment(Appointment appointment) {
+        if (appointment == null || !appointment.hasId()) {
+            throw new IllegalArgumentException("Appointment zonder id");
+        }
+        client.update().resource(appointment).execute();
+    }
 }

@@ -195,7 +195,7 @@ Na `docker compose build openmrs` en recreate (zie `docker/openmrs/README.md`):
 2. **Administration → Manage Modules**: `Appointment Scheduling Module` = Started.
 3. Menu **Appointments** of patient dashboard → tab **Appointments**.
 
-Dit vult **niet** automatisch `polled_appointment` (poller = alleen FHIR R5 op poort 8082).
+Met **`OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=true`** (standaard in compose) exporteert de comm-module elke minuut OpenMRS-boekingen naar FHIR; daarna vult de poll `polled_appointment`. Log: `OpenMRS→FHIR sync: N afspraak(en) geëxporteerd`.
 
 ---
 
