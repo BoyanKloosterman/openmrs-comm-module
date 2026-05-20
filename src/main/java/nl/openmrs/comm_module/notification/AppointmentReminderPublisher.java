@@ -3,6 +3,7 @@ package nl.openmrs.comm_module.notification;
 import nl.openmrs.comm_module.messaging.queue.RabbitMqProducer;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
+import nl.openmrs.comm_module.provider.MessagingProviderType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,12 @@ public class AppointmentReminderPublisher {
     }
 
     public int publish24HourReminders(List<PolledAppointmentEntity> appointments) {
+        return publish24HourReminders(appointments, null);
+    }
+
+    /** Optionele provider voor test-GUI; null = default uit scheduler-config. */
+    public int publish24HourReminders(
+            List<PolledAppointmentEntity> appointments, MessagingProviderType providerOverride) {
         int queued = 0;
         for (PolledAppointmentEntity appointment : appointments) {
             if (!eligibilityService.maySend24HourReminder(appointment)) {
@@ -55,6 +62,9 @@ public class AppointmentReminderPublisher {
                 continue;
             }
             NotificationQueueMessage message = messageOpt.get();
+            if (providerOverride != null) {
+                message.setProvider(providerOverride);
+            }
             rabbitMqProducer.publish(message);
             deliveryLogService.recordQueued(message);
             queued++;

@@ -14,9 +14,13 @@ import java.util.List;
 public class JpaAppointmentPollPersistence implements AppointmentPollPersistence {
 
     private final PolledAppointmentRepository repository;
+    private final PolledAppointmentExclusionRepository exclusionRepository;
 
-    public JpaAppointmentPollPersistence(PolledAppointmentRepository repository) {
+    public JpaAppointmentPollPersistence(
+            PolledAppointmentRepository repository,
+            PolledAppointmentExclusionRepository exclusionRepository) {
         this.repository = repository;
+        this.exclusionRepository = exclusionRepository;
     }
 
     @Override
@@ -25,6 +29,10 @@ public class JpaAppointmentPollPersistence implements AppointmentPollPersistence
         Instant now = Instant.now();
         for (AppointmentWithPatientDto row : appointmentsWithPatients) {
             AppointmentPollDto a = row.appointment();
+            if (exclusionRepository.existsByOrganisationIdAndAppointmentFhirId(
+                    organisationId, a.appointmentId())) {
+                continue;
+            }
             PolledAppointmentEntity entity = repository
                     .findByOrganisationIdAndAppointmentFhirId(organisationId, a.appointmentId())
                     .orElseGet(PolledAppointmentEntity::new);

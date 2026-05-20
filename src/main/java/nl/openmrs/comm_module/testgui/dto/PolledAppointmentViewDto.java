@@ -18,4 +18,6 @@ public record PolledAppointmentViewDto(
         AppointmentWindowStatus windowStatus,
         boolean inReminderWindow,
         boolean alreadySentSuccessfully,
+        String testMessagingProvider,
+        String lastDeliveryProvider,
         MessagePreviewDto messagePreview) {}

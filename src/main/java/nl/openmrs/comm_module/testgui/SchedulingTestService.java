@@ -7,12 +7,15 @@ import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
 import nl.openmrs.comm_module.messaging.fhir.OpenmrsFhirAppointmentMetadata;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.notification.AppointmentReminderMessageBuilder;
+import nl.openmrs.comm_module.notification.AppointmentReminderPublisher;
 import nl.openmrs.comm_module.notification.AppointmentReminderQueryService;
-import nl.openmrs.comm_module.notification.DueNotificationProcessor;
+import nl.openmrs.comm_module.provider.MessagingProviderType;
 import nl.openmrs.comm_module.notification.NotificationDeliveryLogService;
 import nl.openmrs.comm_module.notification.persistence.NotificationDeliveryLogEntity;
 import nl.openmrs.comm_module.notification.persistence.NotificationDeliveryLogRepository;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
+import nl.openmrs.comm_module.poll.persistence.PolledAppointmentExclusionEntity;
+import nl.openmrs.comm_module.poll.persistence.PolledAppointmentExclusionRepository;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
 import nl.openmrs.comm_module.scheduling.OpenmrsFhirPollingService;
 import nl.openmrs.comm_module.scheduling.OpenmrsSchedulingFhirSyncService;
@@ -28,6 +31,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -48,11 +52,12 @@ public class SchedulingTestService {
     private final OpenmrsFhirPollingService pollingService;
     private final OpenmrsSchedulingFhirSyncService schedulingSyncService;
     private final OpenmrsSchedulingTestRepository openmrsTestRepository;
-    private final DueNotificationProcessor dueNotificationProcessor;
+    private final AppointmentReminderPublisher appointmentReminderPublisher;
     private final AppointmentReminderQueryService reminderQueryService;
     private final AppointmentReminderMessageBuilder messageBuilder;
     private final NotificationDeliveryLogService deliveryLogService;
     private final PolledAppointmentRepository polledAppointmentRepository;
+    private final PolledAppointmentExclusionRepository pollExclusionRepository;
     private final NotificationDeliveryLogRepository deliveryLogRepository;
 
     public SchedulingTestService(
@@ -64,11 +69,12 @@ public class SchedulingTestService {
             OpenmrsFhirPollingService pollingService,
             OpenmrsSchedulingFhirSyncService schedulingSyncService,
             OpenmrsSchedulingTestRepository openmrsTestRepository,
-            DueNotificationProcessor dueNotificationProcessor,
+            AppointmentReminderPublisher appointmentReminderPublisher,
             AppointmentReminderQueryService reminderQueryService,
             AppointmentReminderMessageBuilder messageBuilder,
             NotificationDeliveryLogService deliveryLogService,
             PolledAppointmentRepository polledAppointmentRepository,
+            PolledAppointmentExclusionRepository pollExclusionRepository,
             NotificationDeliveryLogRepository deliveryLogRepository) {
         this.clock = clock;
         this.fhirProperties = fhirProperties;
@@ -78,11 +84,12 @@ public class SchedulingTestService {
         this.pollingService = pollingService;
         this.schedulingSyncService = schedulingSyncService;
         this.openmrsTestRepository = openmrsTestRepository;
-        this.dueNotificationProcessor = dueNotificationProcessor;
+        this.appointmentReminderPublisher = appointmentReminderPublisher;
         this.reminderQueryService = reminderQueryService;
         this.messageBuilder = messageBuilder;
         this.deliveryLogService = deliveryLogService;
         this.polledAppointmentRepository = polledAppointmentRepository;
+        this.pollExclusionRepository = pollExclusionRepository;
         this.deliveryLogRepository = deliveryLogRepository;
     }
 
@@ -100,6 +107,7 @@ public class SchedulingTestService {
                 fhirProperties.getPollIntervalMinutes(),
                 schedulerProperties.getReminderZoneId(),
                 schedulerProperties.getDefaultProvider().name(),
+                Arrays.stream(MessagingProviderType.values()).map(Enum::name).toList(),
                 window,
                 due.size());
     }
@@ -142,7 +150,9 @@ public class SchedulingTestService {
             String locationUuid,
             String reason,
             boolean runSyncAfter,
-            boolean runPollAfter) {
+            boolean runPollAfter,
+            String providerName) {
+        MessagingProviderType provider = resolveProvider(providerName);
         if (patientUuid == null || patientUuid.isBlank()) {
             throw new IllegalArgumentException("Kies een patiënt uit OpenMRS");
         }
@@ -186,6 +196,11 @@ public class SchedulingTestService {
         Optional<PolledAppointmentEntity> polled =
                 polledAppointmentRepository.findByOrganisationIdAndAppointmentFhirId(
                         fhirProperties.getOrganisationId(), booked.fhirAppointmentId());
+        polled.ifPresent(
+                p -> {
+                    p.setTestMessagingProvider(provider.name());
+                    polledAppointmentRepository.save(p);
+                });
 
         return new CreateTestAppointmentResultDto(
                 booked.fhirAppointmentId(),
@@ -198,6 +213,22 @@ public class SchedulingTestService {
                 syncNote,
                 pollNote,
                 polled.map(p -> toView(p, now, window)).orElse(null));
+    }
+
+    @Transactional
+    public PolledAppointmentViewDto setTestMessagingProvider(String appointmentFhirId, String providerName) {
+        MessagingProviderType provider = resolveProvider(providerName);
+        PolledAppointmentEntity entity =
+                polledAppointmentRepository
+                        .findByOrganisationIdAndAppointmentFhirId(
+                                fhirProperties.getOrganisationId(), appointmentFhirId.trim())
+                        .orElseThrow(
+                                () ->
+                                        new IllegalArgumentException(
+                                                "Polled appointment niet gevonden: " + appointmentFhirId));
+        entity.setTestMessagingProvider(provider.name());
+        polledAppointmentRepository.save(entity);
+        return toView(entity, clock.instant(), computeWindow(clock.instant()));
     }
 
     public CancelAppointmentResultDto cancelAppointment(String appointmentFhirId, boolean runSyncAfter, boolean runPollAfter) {
@@ -248,22 +279,76 @@ public class SchedulingTestService {
         }
     }
 
-    public SchedulerRunResultDto triggerScheduler() {
+    public SchedulerRunResultDto triggerScheduler(String fallbackProviderName) {
+        MessagingProviderType fallback = resolveProvider(fallbackProviderName);
         try {
-            int before = reminderQueryService.findAppointmentsDueFor24HourReminder().size();
-            dueNotificationProcessor.processDueNotifications();
+            List<PolledAppointmentEntity> due = reminderQueryService.findAppointmentsDueFor24HourReminder();
+            int before = due.size();
+            int queued = publishDueWithPerAppointmentProvider(due, fallback);
             int afterListed = reminderQueryService.findAppointmentsDueFor24HourReminder().size();
-            return new SchedulerRunResultDto(true, before, afterListed, "Scheduler-tick uitgevoerd");
+            return new SchedulerRunResultDto(
+                    true,
+                    before,
+                    afterListed,
+                    queued,
+                    "per-afspraak",
+                    queued + " op queue gezet (provider per afspraak uit test-GUI)");
         } catch (RuntimeException e) {
-            return new SchedulerRunResultDto(false, 0, 0, e.getMessage());
+            return new SchedulerRunResultDto(false, 0, 0, 0, fallback.name(), e.getMessage());
+        }
+    }
+
+    public SchedulerRunResultDto triggerSchedulerForAppointment(
+            String appointmentFhirId, String fallbackProviderName) {
+        MessagingProviderType fallback = resolveProvider(fallbackProviderName);
+        PolledAppointmentEntity entity =
+                polledAppointmentRepository
+                        .findByOrganisationIdAndAppointmentFhirId(
+                                fhirProperties.getOrganisationId(), appointmentFhirId.trim())
+                        .orElseThrow(
+                                () ->
+                                        new IllegalArgumentException(
+                                                "Polled appointment niet gevonden: " + appointmentFhirId));
+        MessagingProviderType provider = resolveProviderForEntity(entity, fallback);
+        try {
+            int queued =
+                    appointmentReminderPublisher.publish24HourReminders(List.of(entity), provider);
+            return new SchedulerRunResultDto(
+                    true,
+                    1,
+                    0,
+                    queued,
+                    provider.name(),
+                    queued > 0
+                            ? "1 bericht via " + provider.name()
+                            : "Geen bericht (al verstuurd, geen tel. of niet in venster)");
+        } catch (RuntimeException e) {
+            return new SchedulerRunResultDto(false, 0, 0, 0, provider.name(), e.getMessage());
         }
     }
 
     public Optional<MessagePreviewDto> previewMessage(String appointmentFhirId) {
         return polledAppointmentRepository
-                .findByOrganisationIdAndAppointmentFhirId(fhirProperties.getOrganisationId(), appointmentFhirId)
-                .flatMap(appointment ->
-                        messageBuilder.build24HourReminder(appointment).map(this::toPreview));
+                .findByOrganisationIdAndAppointmentFhirId(
+                        fhirProperties.getOrganisationId(), appointmentFhirId)
+                .flatMap(
+                        appointment ->
+                                buildPreview(
+                                        appointment,
+                                        resolveProviderForEntity(
+                                                appointment, schedulerProperties.getDefaultProvider())));
+    }
+
+    private int publishDueWithPerAppointmentProvider(
+            List<PolledAppointmentEntity> due, MessagingProviderType fallback) {
+        int queued = 0;
+        for (PolledAppointmentEntity appointment : due) {
+            MessagingProviderType provider = resolveProviderForEntity(appointment, fallback);
+            queued +=
+                    appointmentReminderPublisher.publish24HourReminders(
+                            List.of(appointment), provider);
+        }
+        return queued;
     }
 
     public List<DeliveryLogViewDto> listDeliveryLogs() {
@@ -290,13 +375,26 @@ public class SchedulingTestService {
                                                 "Polled appointment niet gevonden: " + appointmentFhirId));
 
         polledAppointmentRepository.delete(entity);
+        recordPollExclusion(fhirProperties.getOrganisationId(), appointmentFhirId.trim());
         int logsRemoved = clearDeliveryLogs ? clearDeliveryLogs(appointmentFhirId) : 0;
         return new DeletePolledAppointmentResultDto(
                 true,
                 appointmentFhirId,
                 logsRemoved,
-                "Verwijderd uit polled_appointment"
+                "Verwijderd uit polled_appointment (poll slaat deze FHIR-id over)"
                         + (logsRemoved > 0 ? " (+ " + logsRemoved + " delivery-log regels)" : ""));
+    }
+
+    private void recordPollExclusion(String organisationId, String appointmentFhirId) {
+        if (pollExclusionRepository.existsByOrganisationIdAndAppointmentFhirId(
+                organisationId, appointmentFhirId)) {
+            return;
+        }
+        PolledAppointmentExclusionEntity exclusion = new PolledAppointmentExclusionEntity();
+        exclusion.setOrganisationId(organisationId);
+        exclusion.setAppointmentFhirId(appointmentFhirId);
+        exclusion.setExcludedAt(clock.instant());
+        pollExclusionRepository.save(exclusion);
     }
 
     @Transactional
@@ -341,14 +439,54 @@ public class SchedulingTestService {
         return new ReminderWindowDto(target, windowStart, windowEnd, leadHours, windowMinutes);
     }
 
+    private Optional<MessagePreviewDto> buildPreview(
+            PolledAppointmentEntity appointment, MessagingProviderType provider) {
+        return messageBuilder.build24HourReminder(appointment).map(msg -> {
+            msg.setProvider(provider);
+            return toPreview(msg);
+        });
+    }
+
+    private MessagingProviderType resolveProvider(String providerName) {
+        if (providerName == null || providerName.isBlank()) {
+            return schedulerProperties.getDefaultProvider();
+        }
+        try {
+            return MessagingProviderType.valueOf(providerName.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Onbekende provider: " + providerName);
+        }
+    }
+
+    private MessagingProviderType resolveProviderForEntity(
+            PolledAppointmentEntity entity, MessagingProviderType fallback) {
+        String stored = entity.getTestMessagingProvider();
+        if (stored == null || stored.isBlank()) {
+            return fallback;
+        }
+        try {
+            return MessagingProviderType.valueOf(stored.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return fallback;
+        }
+    }
+
+    private String findLastDeliveryProvider(String appointmentFhirId) {
+        return deliveryLogRepository
+                .findFirstByAppointmentFhirIdOrderByAttemptedAtDesc(appointmentFhirId)
+                .map(NotificationDeliveryLogEntity::getProvider)
+                .orElse(null);
+    }
+
     private PolledAppointmentViewDto toView(
             PolledAppointmentEntity a, Instant now, ReminderWindowDto window) {
+        MessagingProviderType previewProvider =
+                resolveProviderForEntity(a, schedulerProperties.getDefaultProvider());
         AppointmentWindowStatus status = resolveStatus(a, now, window);
         boolean inWindow = status == AppointmentWindowStatus.IN_REMINDER_WINDOW;
         boolean alreadySent = deliveryLogService.hasSuccessfulDelivery(
                 a.getAppointmentFhirId(), AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H);
-        Optional<MessagePreviewDto> preview =
-                messageBuilder.build24HourReminder(a).map(this::toPreview);
+        Optional<MessagePreviewDto> preview = buildPreview(a, previewProvider);
         Optional<Integer> openmrsId = openmrsTestRepository.resolveOpenmrsAppointmentId(a.getAppointmentFhirId());
 
         return new PolledAppointmentViewDto(
@@ -367,6 +505,8 @@ public class SchedulingTestService {
                 status,
                 inWindow,
                 alreadySent,
+                a.getTestMessagingProvider(),
+                findLastDeliveryProvider(a.getAppointmentFhirId()),
                 preview.orElse(null));
     }
 

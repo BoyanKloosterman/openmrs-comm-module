@@ -1,6 +1,7 @@
 package nl.openmrs.comm_module.testgui.dto;
 
 import java.time.Instant;
+import java.util.List;
 
 public record SchedulingTestStatusDto(
         Instant serverTime,
@@ -12,5 +13,6 @@ public record SchedulingTestStatusDto(
         int fhirPollIntervalMinutes,
         String reminderZoneId,
         String defaultProvider,
+        List<String> availableProviders,
         ReminderWindowDto reminderWindow,
         int appointmentsCurrentlyInWindow) {}

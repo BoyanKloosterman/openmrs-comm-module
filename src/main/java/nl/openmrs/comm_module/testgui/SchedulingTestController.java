@@ -39,15 +39,23 @@ public class SchedulingTestController {
         return testService.listPolledAppointments();
     }
 
+    @PutMapping("/appointments/{appointmentFhirId}/test-provider")
+    public PolledAppointmentViewDto setTestProvider(
+            @PathVariable String appointmentFhirId, @RequestParam String provider) {
+        return testService.setTestMessagingProvider(appointmentFhirId, provider);
+    }
+
     @PostMapping("/appointments")
     public CreateTestAppointmentResultDto createAppointment(
-            @RequestBody(required = false) CreateTestAppointmentRequest body) {
+            @RequestBody(required = false) CreateTestAppointmentRequest body,
+            @RequestParam(required = false) String provider) {
         String patientUuid = body != null ? body.patientUuid() : null;
         String locationUuid = body != null ? body.locationUuid() : null;
         String reason = body != null ? body.reason() : null;
         boolean runSync = body == null || body.runSyncAfter() == null || body.runSyncAfter();
         boolean runPoll = body == null || body.runPollAfter() == null || body.runPollAfter();
-        return testService.createTestAppointment(patientUuid, locationUuid, reason, runSync, runPoll);
+        return testService.createTestAppointment(
+                patientUuid, locationUuid, reason, runSync, runPoll, provider);
     }
 
     @PostMapping("/appointments/{appointmentFhirId}/cancel")
@@ -64,8 +72,15 @@ public class SchedulingTestController {
     }
 
     @PostMapping("/scheduler")
-    public SchedulerRunResultDto scheduler() {
-        return testService.triggerScheduler();
+    public SchedulerRunResultDto scheduler(@RequestParam(required = false) String provider) {
+        return testService.triggerScheduler(provider);
+    }
+
+    @PostMapping("/appointments/{appointmentFhirId}/scheduler")
+    public SchedulerRunResultDto schedulerForAppointment(
+            @PathVariable String appointmentFhirId,
+            @RequestParam(required = false) String provider) {
+        return testService.triggerSchedulerForAppointment(appointmentFhirId, provider);
     }
 
     @GetMapping("/appointments/{appointmentFhirId}/message-preview")

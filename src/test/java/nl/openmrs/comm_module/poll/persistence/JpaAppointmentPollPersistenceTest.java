@@ -45,6 +45,9 @@ class JpaAppointmentPollPersistenceTest {
     @Autowired
     private AppointmentPollPersistence persistence;
 
+    @Autowired
+    private PolledAppointmentExclusionRepository exclusionRepository;
+
     @Test
     void slaatAppointmentEnPatientOp() {
         AppointmentPollDto apt = new AppointmentPollDto("uuid-1", "apt-1", "pat-1", t, "loc-1", "consult", "Nuchter blijven", false);
@@ -82,5 +85,20 @@ class JpaAppointmentPollPersistenceTest {
         assertTrue(stored.get().isVoided());
         assertEquals(t2, stored.get().getAppointmentDatetime());
         assertEquals(1, repository.count());
+    }
+
+    @Test
+    void upsertSlaatUitgeslotenFhirIdOver() {
+        PolledAppointmentExclusionEntity exclusion = new PolledAppointmentExclusionEntity();
+        exclusion.setOrganisationId("org-x");
+        exclusion.setAppointmentFhirId("apt-skip");
+        exclusion.setExcludedAt(t);
+        exclusionRepository.save(exclusion);
+
+        AppointmentPollDto apt =
+                new AppointmentPollDto("uuid-s", "apt-skip", "pat-1", t, "loc", "type", null, false);
+        persistence.upsertPollResults("org-x", List.of(new AppointmentWithPatientDto(apt, null)));
+
+        assertEquals(0, repository.count());
     }
 }

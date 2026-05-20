@@ -69,6 +69,10 @@ public class PolledAppointmentEntity {
     @Column(name = "last_polled_at", nullable = false)
     private Instant lastPolledAt;
 
+    /** Test-GUI: gekozen messaging provider voor deze afspraak. */
+    @Column(name = "test_messaging_provider", length = 32)
+    private String testMessagingProvider;
+
     public Long getId() {
         return id;
     }
@@ -167,5 +171,13 @@ public class PolledAppointmentEntity {
 
     public void setLastPolledAt(Instant lastPolledAt) {
         this.lastPolledAt = lastPolledAt;
+    }
+
+    public String getTestMessagingProvider() {
+        return testMessagingProvider;
+    }
+
+    public void setTestMessagingProvider(String testMessagingProvider) {
+        this.testMessagingProvider = testMessagingProvider;
     }
 }
