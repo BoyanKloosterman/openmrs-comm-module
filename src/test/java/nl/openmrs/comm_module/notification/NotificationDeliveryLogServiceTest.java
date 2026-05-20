@@ -69,6 +69,19 @@ class NotificationDeliveryLogServiceTest {
     }
 
     @Test
+    void verwijdertQueuedBijAnnulering() {
+        NotificationQueueMessage message = sampleMessage();
+        deliveryLogService.recordQueued(message);
+        assertTrue(deliveryLogService.hasQueuedDeliveryRecord(message.getNotificationId()));
+        assertEquals(1, deliveryLogService.cancelQueuedNotifications("apt-1"));
+        assertFalse(deliveryLogService.hasQueuedDeliveryRecord(message.getNotificationId()));
+        assertTrue(
+                repository
+                        .findByAppointmentFhirIdAndStatus("apt-1", NotificationDeliveryLogService.STATUS_QUEUED)
+                        .isEmpty());
+    }
+
+    @Test
     void misluktePogingNietAlsSuccesvol() {
         NotificationQueueMessage message = sampleMessage();
         deliveryLogService.recordProviderAttempt(message, ProviderSendResult.failed("timeout"));
