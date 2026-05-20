@@ -112,9 +112,14 @@ public class AppointmentReminderMessageBuilder {
         if (appointmentFhirId == null || appointmentFhirId.isBlank()) {
             return null;
         }
-        return fhirOperations
-                .readAppointmentByLogicalId(appointmentFhirId)
-                .map(OpenmrsFhirAppointmentMetadata::readReason)
-                .orElse(null);
+        try {
+            return fhirOperations
+                    .readAppointmentByLogicalId(appointmentFhirId)
+                    .map(OpenmrsFhirAppointmentMetadata::readReason)
+                    .orElse(null);
+        } catch (RuntimeException e) {
+            // Verwijderd in FHIR (410) maar nog in polled_appointment — geen crash in test-GUI
+            return null;
+        }
     }
 }

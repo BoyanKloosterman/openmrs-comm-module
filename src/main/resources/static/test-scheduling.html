@@ -175,6 +175,8 @@
         <h2>Testafspraak aanmaken (OpenMRS)</h2>
         <label for="patient-select">Patiënt uit OpenMRS</label>
         <select id="patient-select"><option value="">— laden… —</option></select>
+        <label for="location-select">Locatie uit OpenMRS</label>
+        <select id="location-select"><option value="">— laden… —</option></select>
         <label for="reason">Reden / instructies (OpenMRS <code>reason</code>)</label>
         <textarea id="reason" rows="2" placeholder="Bijv. Nuchter blijven, medicijnen meenemen">Testafspraak via comm-module GUI</textarea>
         <label><input type="checkbox" id="run-sync" checked> Direct daarna OpenMRS→FHIR sync</label>
@@ -396,6 +398,24 @@
       }
     }
 
+    async function loadLocations() {
+      const sel = document.getElementById('location-select');
+      try {
+        const locations = await api('/locations');
+        if (!locations.length) {
+          sel.innerHTML = '<option value="">Geen locaties in OpenMRS</option>';
+          return;
+        }
+        sel.innerHTML = '<option value="">— kies locatie —</option>' +
+          locations.map(l =>
+            `<option value="${l.locationUuid}">${escapeHtml(l.name)}</option>`
+          ).join('');
+      } catch (e) {
+        sel.innerHTML = '<option value="">Laden mislukt</option>';
+        showToast('Locaties: ' + e.message, true);
+      }
+    }
+
     function renderLogs(logs) {
       const body = document.getElementById('logs-body');
       const empty = document.getElementById('logs-empty');
@@ -453,12 +473,18 @@
     });
     document.getElementById('btn-create').addEventListener('click', async () => {
       const patientUuid = document.getElementById('patient-select').value;
+      const locationUuid = document.getElementById('location-select').value;
       if (!patientUuid) {
         showToast('Kies eerst een patiënt uit OpenMRS', true);
         return;
       }
+      if (!locationUuid) {
+        showToast('Kies eerst een locatie uit OpenMRS', true);
+        return;
+      }
       const body = {
         patientUuid,
+        locationUuid,
         reason: document.getElementById('reason').value,
         runSyncAfter: document.getElementById('run-sync').checked,
         runPollAfter: document.getElementById('run-poll').checked
@@ -470,8 +496,8 @@
           body: JSON.stringify(body)
         });
         document.getElementById('create-result').textContent =
-          `OpenMRS #${r.openmrsAppointmentId} → ${r.appointmentFhirId} om ${fmtInstant(r.appointmentStart)}. ` +
-          `${r.syncNote || ''} ${r.pollNote || ''}`.trim();
+          `OpenMRS #${r.openmrsAppointmentId} → ${r.appointmentFhirId} om ${fmtInstant(r.appointmentStart)} ` +
+          `(${r.locationName || 'locatie onbekend'}). ${r.syncNote || ''} ${r.pollNote || ''}`.trim();
         selectedId = r.appointmentFhirId;
         showToast('Afspraak geboekt in OpenMRS', false);
         await loadAll();
@@ -516,6 +542,7 @@
     }
 
     loadPatients();
+    loadLocations();
     loadAll();
     startAuto();
   </script>

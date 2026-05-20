@@ -8,6 +8,7 @@ public record CreateTestAppointmentResultDto(
         String patientFhirId,
         Instant appointmentStart,
         String reason,
+        String locationName,
         String patientName,
         String syncNote,
         String pollNote,

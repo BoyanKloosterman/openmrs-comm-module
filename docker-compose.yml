@@ -73,8 +73,8 @@ services:
         echo "Wachten op FHIR R5 metadata..."
         until curl -sf "$$BASE/metadata" >/dev/null; do sleep 10; done
         curl -sf -X PUT "$$BASE/Patient/patient-docker-1" -H "Content-Type: application/fhir+json" --data-binary @/seed/seed-patient.json
-        curl -sf -X PUT "$$BASE/Appointment/apt-docker-1" -H "Content-Type: application/fhir+json" --data-binary @/seed/seed-appointment.json
-        echo "FHIR R5 seed klaar"
+        curl -sf -X DELETE "$$BASE/Appointment/apt-docker-1" >/dev/null 2>&1 || true
+        echo "FHIR R5 seed klaar (alleen test-patient, geen vaste appointment)"
     networks:
       - comm-network
     restart: "no"

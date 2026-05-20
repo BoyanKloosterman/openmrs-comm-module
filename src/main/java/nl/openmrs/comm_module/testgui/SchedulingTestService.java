@@ -116,6 +116,12 @@ public class SchedulingTestService {
                 .toList();
     }
 
+    public List<OpenmrsLocationOptionDto> listOpenmrsLocations() {
+        return openmrsTestRepository.listLocations(100).stream()
+                .map(l -> new OpenmrsLocationOptionDto(l.locationUuid(), l.name()))
+                .toList();
+    }
+
     public List<PolledAppointmentViewDto> listPolledAppointments() {
         Instant now = clock.instant();
         ReminderWindowDto window = computeWindow(now);
@@ -132,9 +138,16 @@ public class SchedulingTestService {
     }
 
     public CreateTestAppointmentResultDto createTestAppointment(
-            String patientUuid, String reason, boolean runSyncAfter, boolean runPollAfter) {
+            String patientUuid,
+            String locationUuid,
+            String reason,
+            boolean runSyncAfter,
+            boolean runPollAfter) {
         if (patientUuid == null || patientUuid.isBlank()) {
             throw new IllegalArgumentException("Kies een patiënt uit OpenMRS");
+        }
+        if (locationUuid == null || locationUuid.isBlank()) {
+            throw new IllegalArgumentException("Kies een locatie uit OpenMRS");
         }
 
         Instant now = clock.instant();
@@ -146,7 +159,8 @@ public class SchedulingTestService {
                         : "Testafspraak via comm-module GUI";
 
         OpenmrsSchedulingTestRepository.BookedOpenmrsAppointment booked =
-                openmrsTestRepository.bookAppointment(patientUuid.trim(), start, resolvedReason);
+                openmrsTestRepository.bookAppointment(
+                        patientUuid.trim(), locationUuid.trim(), start, resolvedReason);
 
         String syncNote = null;
         if (runSyncAfter) {
@@ -179,6 +193,7 @@ public class SchedulingTestService {
                 booked.fhirPatientId(),
                 start.atZone(zone).toInstant(),
                 booked.reason(),
+                booked.locationName(),
                 booked.patientDisplayName(),
                 syncNote,
                 pollNote,

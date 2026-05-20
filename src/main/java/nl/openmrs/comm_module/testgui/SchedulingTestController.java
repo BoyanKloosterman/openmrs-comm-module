@@ -29,6 +29,11 @@ public class SchedulingTestController {
         return testService.listOpenmrsPatients();
     }
 
+    @GetMapping("/locations")
+    public List<OpenmrsLocationOptionDto> locations() {
+        return testService.listOpenmrsLocations();
+    }
+
     @GetMapping("/appointments")
     public List<PolledAppointmentViewDto> appointments() {
         return testService.listPolledAppointments();
@@ -38,10 +43,11 @@ public class SchedulingTestController {
     public CreateTestAppointmentResultDto createAppointment(
             @RequestBody(required = false) CreateTestAppointmentRequest body) {
         String patientUuid = body != null ? body.patientUuid() : null;
+        String locationUuid = body != null ? body.locationUuid() : null;
         String reason = body != null ? body.reason() : null;
         boolean runSync = body == null || body.runSyncAfter() == null || body.runSyncAfter();
         boolean runPoll = body == null || body.runPollAfter() == null || body.runPollAfter();
-        return testService.createTestAppointment(patientUuid, reason, runSync, runPoll);
+        return testService.createTestAppointment(patientUuid, locationUuid, reason, runSync, runPoll);
     }
 
     @PostMapping("/appointments/{appointmentFhirId}/cancel")

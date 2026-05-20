@@ -5,6 +5,7 @@ import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.interceptor.BasicAuthInterceptor;
 import ca.uhn.fhir.rest.gclient.DateClientParam;
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
+import ca.uhn.fhir.rest.server.exceptions.ResourceGoneException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.hl7.fhir.instance.model.api.IBaseBundle;
 import org.hl7.fhir.r5.model.Appointment;
@@ -46,7 +47,7 @@ public class OpenmrsFhirClient implements OpenmrsFhirOperations {
         return metadata.getSoftware().getName() + " " + metadata.getSoftware().getVersion();
     }
 
-    /** Haalt Appointment op id; leeg bij 404 of lege id. */
+    /** Haalt Appointment op id; leeg bij 404/410 of lege id. */
     public Optional<Appointment> readAppointmentByLogicalId(String logicalId) {
         if (logicalId == null || logicalId.isBlank()) {
             return Optional.empty();
@@ -57,17 +58,18 @@ public class OpenmrsFhirClient implements OpenmrsFhirOperations {
                     .withId(logicalId.trim())
                     .execute();
             return Optional.ofNullable(appointment);
-        } catch (ResourceNotFoundException e) {
+        } catch (ResourceNotFoundException | ResourceGoneException e) {
             return Optional.empty();
         } catch (BaseServerResponseException e) {
-            if (e.getStatusCode() == 404) {
+            // 410 Gone: verwijderd in FHIR maar nog in polled_appointment
+            if (e.getStatusCode() == 404 || e.getStatusCode() == 410) {
                 return Optional.empty();
             }
             throw e;
         }
     }
 
-    /** Haalt Patient op id; leeg bij 404 of lege id. */
+    /** Haalt Patient op id; leeg bij 404/410 of lege id. */
     public Optional<Patient> readPatientByLogicalId(String logicalId) {
         if (logicalId == null || logicalId.isBlank()) {
             return Optional.empty();
@@ -78,10 +80,10 @@ public class OpenmrsFhirClient implements OpenmrsFhirOperations {
                     .withId(logicalId.trim())
                     .execute();
             return Optional.ofNullable(patient);
-        } catch (ResourceNotFoundException e) {
+        } catch (ResourceNotFoundException | ResourceGoneException e) {
             return Optional.empty();
         } catch (BaseServerResponseException e) {
-            if (e.getStatusCode() == 404) {
+            if (e.getStatusCode() == 404 || e.getStatusCode() == 410) {
                 return Optional.empty();
             }
             throw e;
