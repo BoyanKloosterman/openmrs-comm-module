@@ -260,6 +260,31 @@ public class SchedulingTestService {
     }
 
     @Transactional
+    public DeletePolledAppointmentResultDto deletePolledAppointment(
+            String appointmentFhirId, boolean clearDeliveryLogs) {
+        if (appointmentFhirId == null || appointmentFhirId.isBlank()) {
+            throw new IllegalArgumentException("appointmentFhirId ontbreekt");
+        }
+        PolledAppointmentEntity entity =
+                polledAppointmentRepository
+                        .findByOrganisationIdAndAppointmentFhirId(
+                                fhirProperties.getOrganisationId(), appointmentFhirId.trim())
+                        .orElseThrow(
+                                () ->
+                                        new IllegalArgumentException(
+                                                "Polled appointment niet gevonden: " + appointmentFhirId));
+
+        polledAppointmentRepository.delete(entity);
+        int logsRemoved = clearDeliveryLogs ? clearDeliveryLogs(appointmentFhirId) : 0;
+        return new DeletePolledAppointmentResultDto(
+                true,
+                appointmentFhirId,
+                logsRemoved,
+                "Verwijderd uit polled_appointment"
+                        + (logsRemoved > 0 ? " (+ " + logsRemoved + " delivery-log regels)" : ""));
+    }
+
+    @Transactional
     public int clearDeliveryLogs(String appointmentFhirId) {
         List<NotificationDeliveryLogEntity> all = deliveryLogRepository.findAll();
         List<NotificationDeliveryLogEntity> toDelete = new ArrayList<>();

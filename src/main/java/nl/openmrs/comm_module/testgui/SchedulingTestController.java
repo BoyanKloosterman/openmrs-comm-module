@@ -81,4 +81,11 @@ public class SchedulingTestController {
         int removed = testService.clearDeliveryLogs(appointmentFhirId);
         return ResponseEntity.ok(removed + " logregel(s) verwijderd");
     }
+
+    @DeleteMapping("/polled-appointments/{appointmentFhirId}")
+    public DeletePolledAppointmentResultDto deletePolledAppointment(
+            @PathVariable String appointmentFhirId,
+            @RequestParam(defaultValue = "true") boolean clearDeliveryLogs) {
+        return testService.deletePolledAppointment(appointmentFhirId, clearDeliveryLogs);
+    }
 }

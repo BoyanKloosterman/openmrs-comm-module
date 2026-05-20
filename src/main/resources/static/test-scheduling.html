@@ -210,6 +210,7 @@
         <div class="message-box" id="message-body">—</div>
         <div class="btn-row">
           <button type="button" class="btn-danger" id="btn-cancel" disabled>Annuleer in OpenMRS</button>
+          <button type="button" class="btn-danger" id="btn-delete-polled" disabled>Verwijder polled rij</button>
           <button type="button" class="btn-danger" id="btn-clear-logs" disabled>Logs wissen</button>
         </div>
       </section>
@@ -370,6 +371,7 @@
       const row = rows.find(r => r.appointmentFhirId === id);
       selectedCancellable = row && !row.voided;
       document.getElementById('btn-clear-logs').disabled = !id;
+      document.getElementById('btn-delete-polled').disabled = !id;
       document.getElementById('btn-cancel').disabled = !selectedCancellable;
       renderAppointments(rows);
       renderMessage(row, row?.messagePreview);
@@ -425,6 +427,7 @@
           const row = appointments.find(a => a.appointmentFhirId === selectedId);
           selectedCancellable = row && !row.voided;
           document.getElementById('btn-cancel').disabled = !selectedCancellable;
+          document.getElementById('btn-delete-polled').disabled = !selectedId;
           renderMessage(row, row?.messagePreview);
         }
         renderLogs(logs);
@@ -480,6 +483,15 @@
       try {
         const r = await api('/appointments/' + encodeURIComponent(selectedId) + '/cancel', { method: 'POST' });
         showToast(r.message, !r.success);
+        await loadAll();
+      } catch (e) { showToast(e.message, true); }
+    });
+    document.getElementById('btn-delete-polled').addEventListener('click', async () => {
+      if (!selectedId || !confirm('Polled appointment ' + selectedId + ' verwijderen (+ delivery logs)?')) return;
+      try {
+        const r = await api('/polled-appointments/' + encodeURIComponent(selectedId) + '?clearDeliveryLogs=true', { method: 'DELETE' });
+        showToast(r.message, false);
+        selectedId = null;
         await loadAll();
       } catch (e) { showToast(e.message, true); }
     });
