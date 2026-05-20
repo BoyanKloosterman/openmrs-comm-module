@@ -57,4 +57,12 @@ build/
 hs_err_pid*
 replay_pid*
 .env
+
+# Lokale OpenMRS-debug (niet nodig in repo; modules komen uit docker/openmrs)
+*-original.jar
+*-files.txt
+dwr-auth-javap.txt
+login-page.html
+tmp-modules/
+
 # End of https://www.toptal.com/developers/gitignore/api/java
