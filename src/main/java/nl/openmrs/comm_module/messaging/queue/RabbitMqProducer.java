@@ -2,6 +2,7 @@ package nl.openmrs.comm_module.messaging.queue;
 
 import nl.openmrs.comm_module.config.RabbitMqConfig;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
+import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 
@@ -18,11 +19,17 @@ public class RabbitMqProducer {
         sendToProviderQueue(message);
     }
 
-    public void publishRetry(NotificationQueueMessage message) {
+    public void publishRetry(NotificationQueueMessage message, long delayMs) {
+        MessagePostProcessor delayProcessor = msg -> {
+            msg.getMessageProperties().setExpiration(String.valueOf(delayMs));
+            return msg;
+        };
+
         rabbitTemplate.convertAndSend(
                 RabbitMqConfig.RETRY_EXCHANGE,
                 message.getProvider().getRoutingKey(),
-                message
+                message,
+                delayProcessor
         );
     }
 
