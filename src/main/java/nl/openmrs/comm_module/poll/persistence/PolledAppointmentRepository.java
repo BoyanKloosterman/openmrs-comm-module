@@ -1,6 +1,7 @@
 package nl.openmrs.comm_module.poll.persistence;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -26,4 +27,13 @@ public interface PolledAppointmentRepository extends JpaRepository<PolledAppoint
             @Param("now") Instant now,
             @Param("windowStart") Instant windowStart,
             @Param("windowEnd") Instant windowEnd);
+
+    List<PolledAppointmentEntity> findByAppointmentDatetimeBefore(Instant cutoff);
+
+    @Modifying
+    @Query("""
+            DELETE FROM PolledAppointmentEntity a
+            WHERE a.appointmentDatetime < :cutoff
+            """)
+    int deleteOlderThan(@Param("cutoff") Instant cutoff);
 }
