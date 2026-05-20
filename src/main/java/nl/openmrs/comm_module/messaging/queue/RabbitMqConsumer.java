@@ -1,6 +1,7 @@
 package nl.openmrs.comm_module.messaging.queue;
 
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
+import nl.openmrs.comm_module.message_log.MessageLogService;
 import nl.openmrs.comm_module.notification.NotificationDeliveryLogService;
 import nl.openmrs.comm_module.provider.MessagingProvider;
 import nl.openmrs.comm_module.provider.MessagingProviderFactory;
@@ -19,16 +20,19 @@ public class RabbitMqConsumer {
 
     private final MessagingProviderFactory providerFactory;
     private final NotificationDeliveryLogService deliveryLogService;
+    private final MessageLogService messageLogService;
     private final RabbitMqProducer rabbitMqProducer;
     private final int maxAttempts;
 
     public RabbitMqConsumer(
             MessagingProviderFactory providerFactory,
             NotificationDeliveryLogService deliveryLogService,
+            MessageLogService messageLogService,
             RabbitMqProducer rabbitMqProducer,
             @Value("${messaging.retry.max-attempts}") int maxAttempts) {
         this.providerFactory = providerFactory;
         this.deliveryLogService = deliveryLogService;
+        this.messageLogService = messageLogService;
         this.rabbitMqProducer = rabbitMqProducer;
         this.maxAttempts = maxAttempts;
     }
@@ -38,6 +42,7 @@ public class RabbitMqConsumer {
         MessagingProvider provider = providerFactory.getProvider(message.getProvider());
         ProviderSendResult result = provider.sendMessage(message);
         deliveryLogService.recordProviderAttempt(message, result);
+        messageLogService.recordProviderAttempt(message, result);
 
         if (!result.isSuccessful()) {
             handleFailedMessage(message, result);

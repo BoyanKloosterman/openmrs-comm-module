@@ -1,6 +1,7 @@
 package nl.openmrs.comm_module.messaging.queue;
 
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
+import nl.openmrs.comm_module.message_log.MessageLogService;
 import nl.openmrs.comm_module.notification.NotificationDeliveryLogService;
 import nl.openmrs.comm_module.provider.MessagingProvider;
 import nl.openmrs.comm_module.provider.MessagingProviderFactory;
@@ -35,13 +36,21 @@ class RabbitMqConsumerTest {
     private NotificationDeliveryLogService deliveryLogService;
 
     @Mock
+    private MessageLogService messageLogService;
+
+    @Mock
     private RabbitMqProducer rabbitMqProducer;
 
     private RabbitMqConsumer consumer;
 
     @BeforeEach
     void setUp() {
-        consumer = new RabbitMqConsumer(providerFactory, deliveryLogService, rabbitMqProducer, MAX_ATTEMPTS);
+        consumer = new RabbitMqConsumer(
+                providerFactory,
+                deliveryLogService,
+                messageLogService,
+                rabbitMqProducer,
+                MAX_ATTEMPTS);
     }
 
     @Test
@@ -58,6 +67,7 @@ class RabbitMqConsumerTest {
 
         verify(messagingProvider).sendMessage(message);
         verify(deliveryLogService).recordProviderAttempt(message, result);
+        verify(messageLogService).recordProviderAttempt(message, result);
         verify(rabbitMqProducer, never()).publishRetry(message);
     }
 
@@ -74,6 +84,7 @@ class RabbitMqConsumerTest {
         consumer.consume(message);
 
         verify(deliveryLogService).recordProviderAttempt(message, result);
+        verify(messageLogService).recordProviderAttempt(message, result);
         verify(rabbitMqProducer).publishRetry(message);
     }
 
@@ -89,6 +100,7 @@ class RabbitMqConsumerTest {
         when(messagingProvider.sendMessage(message)).thenReturn(result);
 
         assertThrows(AmqpRejectAndDontRequeueException.class, () -> consumer.consume(message));
+        verify(messageLogService).recordProviderAttempt(message, result);
         verify(rabbitMqProducer, never()).publishRetry(message);
     }
 }
