@@ -30,6 +30,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -41,6 +42,7 @@ public class SchedulingTestService {
 
     private static final int DELIVERY_LOG_LIMIT = 30;
     private static final int APPOINTMENT_LIST_LIMIT = 50;
+    private static final int OPENMRS_APPOINTMENT_LIST_LIMIT = 200;
     private static final int PATIENT_LIST_LIMIT = 200;
     private static final Duration DEFAULT_OFFSET_AFTER_LEAD = Duration.ofMinutes(5);
 
@@ -133,6 +135,45 @@ public class SchedulingTestService {
         return openmrsTestRepository.listLocations(100).stream()
                 .map(l -> new OpenmrsLocationOptionDto(l.locationUuid(), l.name()))
                 .toList();
+    }
+
+    public List<OpenmrsAppointmentViewDto> listOpenmrsAppointments(boolean includeVoided) {
+        return openmrsTestRepository.listAppointments(OPENMRS_APPOINTMENT_LIST_LIMIT, includeVoided).stream()
+                .map(this::toOpenmrsAppointmentView)
+                .toList();
+    }
+
+    public MutateOpenmrsAppointmentResultDto updateOpenmrsAppointment(
+            int openmrsAppointmentId, UpdateOpenmrsAppointmentRequest body) {
+        if (body == null) {
+            throw new IllegalArgumentException("Body ontbreekt");
+        }
+        boolean runSync = body.runSyncAfter() == null || body.runSyncAfter();
+        boolean runPoll = body.runPollAfter() == null || body.runPollAfter();
+        LocalDateTime start = parseAppointmentStartUtc(body.appointmentStart());
+
+        boolean updated =
+                openmrsTestRepository.updateAppointment(
+                        openmrsAppointmentId, body.reason(), body.status(), start, body.locationUuid());
+        String fhirId = "omrs-appt-" + openmrsAppointmentId;
+        if (!updated) {
+            return new MutateOpenmrsAppointmentResultDto(
+                    false, openmrsAppointmentId, fhirId, "Afspraak niet bijgewerkt (niet gevonden of voided)");
+        }
+        String message = runSyncPollAfterMutate(runSync, runPoll, "Afspraak bijgewerkt in OpenMRS");
+        return new MutateOpenmrsAppointmentResultDto(true, openmrsAppointmentId, fhirId, message);
+    }
+
+    public MutateOpenmrsAppointmentResultDto deleteOpenmrsAppointment(
+            int openmrsAppointmentId, boolean runSyncAfter, boolean runPollAfter) {
+        boolean deleted = openmrsTestRepository.voidAppointment(openmrsAppointmentId);
+        String fhirId = "omrs-appt-" + openmrsAppointmentId;
+        if (!deleted) {
+            return new MutateOpenmrsAppointmentResultDto(
+                    false, openmrsAppointmentId, fhirId, "Afspraak niet verwijderd (niet gevonden of al voided)");
+        }
+        String message = runSyncPollAfterMutate(runSyncAfter, runPollAfter, "Afspraak verwijderd (voided) in OpenMRS");
+        return new MutateOpenmrsAppointmentResultDto(true, openmrsAppointmentId, fhirId, message);
     }
 
     public List<PolledAppointmentViewDto> listPolledAppointments() {
@@ -459,6 +500,51 @@ public class SchedulingTestService {
         }
         deliveryLogRepository.deleteAll(toDelete);
         return toDelete.size();
+    }
+
+    private String runSyncPollAfterMutate(boolean runSyncAfter, boolean runPollAfter, String baseMessage) {
+        String message = baseMessage;
+        if (runSyncAfter) {
+            try {
+                schedulingSyncService.runSync();
+                message += "; sync voltooid";
+            } catch (RuntimeException e) {
+                message += "; sync: " + e.getMessage();
+            }
+        }
+        if (runPollAfter) {
+            try {
+                pollingService.pollOpenmrsFhir();
+                message += "; poll voltooid";
+            } catch (RuntimeException e) {
+                message += "; poll: " + e.getMessage();
+            }
+        }
+        return message;
+    }
+
+    private static LocalDateTime parseAppointmentStartUtc(String appointmentStart) {
+        if (appointmentStart == null || appointmentStart.isBlank()) {
+            return null;
+        }
+        return LocalDateTime.ofInstant(Instant.parse(appointmentStart.trim()), ZoneOffset.UTC);
+    }
+
+    private OpenmrsAppointmentViewDto toOpenmrsAppointmentView(
+            OpenmrsSchedulingTestRepository.OpenmrsAppointmentListRow row) {
+        return new OpenmrsAppointmentViewDto(
+                row.appointmentId(),
+                row.fhirAppointmentId(),
+                row.status(),
+                row.voided(),
+                row.startInstant(),
+                row.endInstant(),
+                row.patientDisplayName(),
+                row.patientUuid(),
+                row.locationName(),
+                row.locationUuid(),
+                row.typeName(),
+                row.reason());
     }
 
     private boolean cancelFhirOnly(String appointmentFhirId) {

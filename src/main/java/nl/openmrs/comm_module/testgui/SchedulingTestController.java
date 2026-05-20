@@ -39,6 +39,27 @@ public class SchedulingTestController {
         return testService.listPolledAppointments();
     }
 
+    @GetMapping("/openmrs-appointments")
+    public List<OpenmrsAppointmentViewDto> openmrsAppointments(
+            @RequestParam(defaultValue = "false") boolean includeVoided) {
+        return testService.listOpenmrsAppointments(includeVoided);
+    }
+
+    @PutMapping("/openmrs-appointments/{openmrsAppointmentId}")
+    public MutateOpenmrsAppointmentResultDto updateOpenmrsAppointment(
+            @PathVariable int openmrsAppointmentId,
+            @RequestBody(required = false) UpdateOpenmrsAppointmentRequest body) {
+        return testService.updateOpenmrsAppointment(openmrsAppointmentId, body);
+    }
+
+    @DeleteMapping("/openmrs-appointments/{openmrsAppointmentId}")
+    public MutateOpenmrsAppointmentResultDto deleteOpenmrsAppointment(
+            @PathVariable int openmrsAppointmentId,
+            @RequestParam(defaultValue = "true") boolean runSyncAfter,
+            @RequestParam(defaultValue = "true") boolean runPollAfter) {
+        return testService.deleteOpenmrsAppointment(openmrsAppointmentId, runSyncAfter, runPollAfter);
+    }
+
     @PutMapping("/appointments/{appointmentFhirId}/test-provider")
     public PolledAppointmentViewDto setTestProvider(
             @PathVariable String appointmentFhirId, @RequestParam String provider) {
