@@ -15,9 +15,12 @@ import nl.openmrs.comm_module.persistence.EncryptedStringConverter;
 
 @Entity
 @Table(
-        name = "polled_encounter",
-        uniqueConstraints = @UniqueConstraint(name = "uk_polled_encounter_org_encounter", columnNames = {"organisation_id", "encounter_fhir_id"}))
-public class PolledEncounterEntity {
+        name = "polled_appointment",
+        uniqueConstraints =
+                @UniqueConstraint(
+                        name = "uk_polled_appointment_org_appointment",
+                        columnNames = {"organisation_id", "appointment_fhir_id"}))
+public class PolledAppointmentEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -26,26 +29,31 @@ public class PolledEncounterEntity {
     @Column(name = "organisation_id", nullable = false, length = 128)
     private String organisationId;
 
-    /** Stabiele UUID uit mapper (omschrijving OpenMRS). */
-    @Column(name = "encounter_uuid", nullable = false, length = 128)
-    private String encounterUuid;
+    @Column(name = "appointment_uuid", nullable = false, length = 128)
+    private String appointmentUuid;
 
-    @Column(name = "encounter_fhir_id", nullable = false, length = 128)
-    private String encounterFhirId;
+    @Column(name = "appointment_fhir_id", nullable = false, length = 128)
+    private String appointmentFhirId;
 
     @Column(name = "patient_fhir_id", nullable = false, length = 128)
     private String patientFhirId;
 
-    @Column(name = "encounter_datetime", nullable = false)
-    private Instant encounterDatetime;
+    @Column(name = "appointment_datetime", nullable = false)
+    private Instant appointmentDatetime;
 
+    /** Leesbare locatie (polikliniek/kamer); geen FHIR Location-uuid. */
     @Convert(converter = EncryptedStringConverter.class)
-    @Column(name = "location_id", length = 128)
+    @Column(name = "location_id", length = 512)
     private String locationId;
 
     @Convert(converter = EncryptedStringConverter.class)
-    @Column(name = "encounter_type", length = 512)
-    private String encounterType;
+    @Column(name = "appointment_type", length = 512)
+    private String appointmentType;
+
+    /** OpenMRS reason / FHIR instructie-extension. */
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "appointment_reason", length = 1024)
+    private String appointmentReason;
 
     @Column(name = "voided", nullable = false)
     private boolean voided;
@@ -61,6 +69,10 @@ public class PolledEncounterEntity {
     @Column(name = "last_polled_at", nullable = false)
     private Instant lastPolledAt;
 
+    /** Test-GUI: gekozen messaging provider voor deze afspraak. */
+    @Column(name = "test_messaging_provider", length = 32)
+    private String testMessagingProvider;
+
     public Long getId() {
         return id;
     }
@@ -73,20 +85,20 @@ public class PolledEncounterEntity {
         this.organisationId = organisationId;
     }
 
-    public String getEncounterUuid() {
-        return encounterUuid;
+    public String getAppointmentUuid() {
+        return appointmentUuid;
     }
 
-    public void setEncounterUuid(String encounterUuid) {
-        this.encounterUuid = encounterUuid;
+    public void setAppointmentUuid(String appointmentUuid) {
+        this.appointmentUuid = appointmentUuid;
     }
 
-    public String getEncounterFhirId() {
-        return encounterFhirId;
+    public String getAppointmentFhirId() {
+        return appointmentFhirId;
     }
 
-    public void setEncounterFhirId(String encounterFhirId) {
-        this.encounterFhirId = encounterFhirId;
+    public void setAppointmentFhirId(String appointmentFhirId) {
+        this.appointmentFhirId = appointmentFhirId;
     }
 
     public String getPatientFhirId() {
@@ -97,12 +109,12 @@ public class PolledEncounterEntity {
         this.patientFhirId = patientFhirId;
     }
 
-    public Instant getEncounterDatetime() {
-        return encounterDatetime;
+    public Instant getAppointmentDatetime() {
+        return appointmentDatetime;
     }
 
-    public void setEncounterDatetime(Instant encounterDatetime) {
-        this.encounterDatetime = encounterDatetime;
+    public void setAppointmentDatetime(Instant appointmentDatetime) {
+        this.appointmentDatetime = appointmentDatetime;
     }
 
     public String getLocationId() {
@@ -113,12 +125,20 @@ public class PolledEncounterEntity {
         this.locationId = locationId;
     }
 
-    public String getEncounterType() {
-        return encounterType;
+    public String getAppointmentType() {
+        return appointmentType;
     }
 
-    public void setEncounterType(String encounterType) {
-        this.encounterType = encounterType;
+    public void setAppointmentType(String appointmentType) {
+        this.appointmentType = appointmentType;
+    }
+
+    public String getAppointmentReason() {
+        return appointmentReason;
+    }
+
+    public void setAppointmentReason(String appointmentReason) {
+        this.appointmentReason = appointmentReason;
     }
 
     public boolean isVoided() {
@@ -151,5 +171,13 @@ public class PolledEncounterEntity {
 
     public void setLastPolledAt(Instant lastPolledAt) {
         this.lastPolledAt = lastPolledAt;
+    }
+
+    public String getTestMessagingProvider() {
+        return testMessagingProvider;
+    }
+
+    public void setTestMessagingProvider(String testMessagingProvider) {
+        this.testMessagingProvider = testMessagingProvider;
     }
 }

@@ -1,0 +1,16 @@
+{
+  "resourceType": "Appointment",
+  "id": "test-appointment-1",
+  "status": "booked",
+  "start": "2026-05-14T10:15:30Z",
+  "subject": {
+    "reference": "Patient/patient-42"
+  },
+  "serviceType": [
+    {
+      "concept": {
+        "text": "Follow-up visit"
+      }
+    }
+  ]
+}

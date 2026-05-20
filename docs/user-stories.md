@@ -42,10 +42,13 @@ Sprint 2 | HBO Software Engineering | Groep C8
 
 ### US-003 — Afspraakdata ophalen uit OpenMRS (Boyan)
 
-**User story:** Als systeem wil ik afspraakdata periodiek ophalen uit OpenMRS via de FHIR API zodat de communicatiemodule altijd actuele afspraken heeft om notificaties op te baseren.
+**User story:** Als systeem wil ik afspraakdata periodiek ophalen uit OpenMRS zodat de communicatiemodule altijd actuele afspraken heeft om notificaties op te baseren.
+
+**Technische noot:** Afspraken en patiënten worden opgehaald via **FHIR R5** (`Appointment` en `Patient`), conform [HL7 Appointment v5.0.0](https://www.hl7.org/fhir/appointment.html). Je hoeft daarvoor **niet** de OpenMRS FHIR2-module te gebruiken; in Docker praten we tegen een standalone HAPI FHIR R5-server. Validatie van Patient en Appointment blijft van toepassing (zie US-009).
 
 **Acceptatiecriteria:**
-- De module pollt FHIR-bezoekdata (**Encounter** op OpenMRS FHIR2; `Appointment` wordt hier niet gebruikt) van elke gekoppelde OpenMRS-instantie.
+- De module pollt afspraakdata via FHIR R5 (`GET Appointment?date=ge...&date=le...`) van elke gekoppelde OpenMRS-instantie.
+- De bijbehorende patiëntdata wordt opgehaald via FHIR R5 (`Patient/{id}`).
 - Nieuwe en gewijzigde afspraken worden opgeslagen in de eigen database.
 - Afspraken die al voorbij zijn worden niet opnieuw verwerkt.
 - Als OpenMRS offline is, logt de module de fout en probeert het bij de volgende cyclus opnieuw.
@@ -121,11 +124,14 @@ Sprint 2 | HBO Software Engineering | Groep C8
 
 **User story:** Als systeem wil ik binnenkomende FHIR-berichten valideren op structuur en verplichte velden zodat ongeldige berichten niet verwerkt worden en fouten vroeg gesignaleerd worden.
 
+**Scope-aanpassing (zie US-003):** De polling-laag valideert FHIR R5 `Patient`- en `Appointment`-resources op verplichte velden voordat ze worden opgeslagen.
+
 **Acceptatiecriteria:**
-- Het systeem controleert of een FHIR Appointment-resource alle verplichte velden bevat.
-- Een ongeldig bericht wordt geweigerd en de fout wordt gelogd.
-- Een geldig bericht wordt doorgegeven aan de schedulinglaag.
-- De validatie volgt de HL7 FHIR R4 specificatie.
+- Het systeem controleert of een FHIR Patient-resource alle verplichte velden bevat (id, name, gender of birthDate, telecom voor phone).
+- Een ongeldige Patient-resource wordt geweigerd en de fout wordt gelogd.
+- Een geldige resource wordt doorgegeven aan de schedulinglaag.
+- De validatie volgt de HL7 FHIR R5 specificatie.
+- De FHIR R5 Appointment-resource wordt gecontroleerd op id, start en patient-referentie (subject of participant); ongeldige rijen worden overgeslagen en gelogd.
 
 ---
 

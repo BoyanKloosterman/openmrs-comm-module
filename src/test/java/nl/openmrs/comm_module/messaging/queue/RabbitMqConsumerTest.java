@@ -1,103 +1,94 @@
 package nl.openmrs.comm_module.messaging.queue;
 
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
+import nl.openmrs.comm_module.notification.NotificationDeliveryLogService;
 import nl.openmrs.comm_module.provider.MessagingProvider;
 import nl.openmrs.comm_module.provider.MessagingProviderFactory;
 import nl.openmrs.comm_module.provider.MessagingProviderType;
 import nl.openmrs.comm_module.provider.ProviderSendResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 
-import java.time.Instant;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 class RabbitMqConsumerTest {
 
+    private static final int MAX_ATTEMPTS = 3;
+
+    @Mock
     private MessagingProviderFactory providerFactory;
-    private RabbitMqProducer rabbitMqProducer;
+
+    @Mock
     private MessagingProvider messagingProvider;
-    private RabbitMqConsumer rabbitMqConsumer;
+
+    @Mock
+    private NotificationDeliveryLogService deliveryLogService;
+
+    @Mock
+    private RabbitMqProducer rabbitMqProducer;
+
+    private RabbitMqConsumer consumer;
 
     @BeforeEach
     void setUp() {
-        providerFactory = mock(MessagingProviderFactory.class);
-        rabbitMqProducer = mock(RabbitMqProducer.class);
-        messagingProvider = mock(MessagingProvider.class);
-
-        rabbitMqConsumer = new RabbitMqConsumer(
-                providerFactory,
-                rabbitMqProducer,
-                3
-        );
+        consumer = new RabbitMqConsumer(providerFactory, deliveryLogService, rabbitMqProducer, MAX_ATTEMPTS);
     }
 
     @Test
-    void consumeDoesNotRetryWhenProviderSendIsSuccessful() {
-        NotificationQueueMessage message = createMessage();
-        ProviderSendResult result = ProviderSendResult.success("provider-message-id");
+    void logtVerzendstatusNaProviderPoging() {
+        NotificationQueueMessage message = new NotificationQueueMessage();
+        message.setNotificationId(UUID.randomUUID());
+        message.setProvider(MessagingProviderType.SWIFTSEND);
+        ProviderSendResult result = ProviderSendResult.success("ext-1");
 
-        when(providerFactory.getProvider(MessagingProviderType.SWIFTSEND))
-                .thenReturn(messagingProvider);
-        when(messagingProvider.sendMessage(message))
-                .thenReturn(result);
+        when(providerFactory.getProvider(MessagingProviderType.SWIFTSEND)).thenReturn(messagingProvider);
+        when(messagingProvider.sendMessage(message)).thenReturn(result);
 
-        rabbitMqConsumer.consume(message);
+        consumer.consume(message);
 
-        verify(rabbitMqProducer, never()).publishRetry(any());
-        assertEquals(0, message.getRetryCount());
+        verify(messagingProvider).sendMessage(message);
+        verify(deliveryLogService).recordProviderAttempt(message, result);
+        verify(rabbitMqProducer, never()).publishRetry(message);
     }
 
     @Test
-    void consumePublishesRetryWhenProviderSendFailsAndRetriesAreAvailable() {
-        NotificationQueueMessage message = createMessage();
-        message.setRetryCount(1);
+    void plantRetryBijMisluktePoging() {
+        NotificationQueueMessage message = new NotificationQueueMessage();
+        message.setNotificationId(UUID.randomUUID());
+        message.setProvider(MessagingProviderType.SWIFTSEND);
+        ProviderSendResult result = ProviderSendResult.failed("timeout");
 
-        ProviderSendResult result = ProviderSendResult.failed("Invalid API key");
+        when(providerFactory.getProvider(MessagingProviderType.SWIFTSEND)).thenReturn(messagingProvider);
+        when(messagingProvider.sendMessage(message)).thenReturn(result);
 
-        when(providerFactory.getProvider(MessagingProviderType.SWIFTSEND))
-                .thenReturn(messagingProvider);
-        when(messagingProvider.sendMessage(message))
-                .thenReturn(result);
+        consumer.consume(message);
 
-        rabbitMqConsumer.consume(message);
-
-        assertEquals(2, message.getRetryCount());
+        verify(deliveryLogService).recordProviderAttempt(message, result);
         verify(rabbitMqProducer).publishRetry(message);
     }
 
     @Test
-    void consumeRejectsMessageWhenMaxRetriesAreReached() {
-        NotificationQueueMessage message = createMessage();
-        message.setRetryCount(3);
+    void weigertNaMaxRetries() {
+        NotificationQueueMessage message = new NotificationQueueMessage();
+        message.setNotificationId(UUID.randomUUID());
+        message.setProvider(MessagingProviderType.SWIFTSEND);
+        message.setRetryCount(MAX_ATTEMPTS);
+        ProviderSendResult result = ProviderSendResult.failed("timeout");
 
-        ProviderSendResult result = ProviderSendResult.failed("Invalid API key");
+        when(providerFactory.getProvider(MessagingProviderType.SWIFTSEND)).thenReturn(messagingProvider);
+        when(messagingProvider.sendMessage(message)).thenReturn(result);
 
-        when(providerFactory.getProvider(MessagingProviderType.SWIFTSEND))
-                .thenReturn(messagingProvider);
-        when(messagingProvider.sendMessage(message))
-                .thenReturn(result);
-
-        assertThrows(
-                AmqpRejectAndDontRequeueException.class,
-                () -> rabbitMqConsumer.consume(message)
-        );
-
-        verify(rabbitMqProducer, never()).publishRetry(any());
-    }
-
-    private NotificationQueueMessage createMessage() {
-        return new NotificationQueueMessage(
-                UUID.randomUUID(),
-                "+31612345678",
-                "Test subject",
-                "Test body",
-                MessagingProviderType.SWIFTSEND,
-                "SMS",
-                Instant.now()
-        );
+        assertThrows(AmqpRejectAndDontRequeueException.class, () -> consumer.consume(message));
+        verify(rabbitMqProducer, never()).publishRetry(message);
     }
 }

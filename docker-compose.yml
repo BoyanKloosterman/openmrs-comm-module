@@ -40,12 +40,51 @@ services:
       - comm-network
     restart: unless-stopped
 
+  # Standalone FHIR R5 (HL7 Appointment) — niet OpenMRS FHIR2
+  fhir-r5:
+    # Gebruik latest (Spring Boot), niet latest-tomcat: die kan ROOT.war niet uitpakken (rechten)
+    image: hapiproject/hapi:latest
+    container_name: comm-module-fhir-r5
+    volumes:
+      - ./docker/fhir-r5/application.yaml:/data/hapi/application.yaml:ro
+    environment:
+      SPRING_CONFIG_LOCATION: file:///data/hapi/application.yaml
+    ports:
+      - "8082:8080"
+    # Geen healthcheck: image heeft geen curl; seed/comm-module wachten zelf op metadata
+    networks:
+      - comm-network
+    restart: unless-stopped
+
+  fhir-r5-seed:
+    image: curlimages/curl:8.5.0
+    container_name: comm-module-fhir-r5-seed
+    depends_on:
+      fhir-r5:
+        condition: service_started
+    volumes:
+      - ./docker/fhir-r5:/seed:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        BASE=http://fhir-r5:8080/fhir
+        echo "Wachten op FHIR R5 metadata..."
+        until curl -sf "$$BASE/metadata" >/dev/null; do sleep 10; done
+        curl -sf -X PUT "$$BASE/Patient/patient-docker-1" -H "Content-Type: application/fhir+json" --data-binary @/seed/seed-patient.json
+        curl -sf -X DELETE "$$BASE/Appointment/apt-docker-1" >/dev/null 2>&1 || true
+        echo "FHIR R5 seed klaar (alleen test-patient, geen vaste appointment)"
+    networks:
+      - comm-network
+    restart: "no"
+
   openmrs:
     build:
       context: ./docker/openmrs
       dockerfile: Dockerfile
-    # Lokale tag; niet op Docker Hub — voorkomt pull-fout zonder --build
-    image: openmrs-comm-fhir:2.7.9
+    # Lokale tag; niet op Docker Hub — bij module-wijziging: docker compose build openmrs
+    image: openmrs-comm-fhir:2.5.14-appointments
     pull_policy: build
     container_name: openmrs-server
     depends_on:
@@ -65,9 +104,9 @@ services:
       - "8080:8080"
     volumes:
       - openmrs_data:/openmrs/data
-    # /openmrs/health/alive geeft 404 op deze image; root/login reageert wel 200 als app klaar is
+    # Static asset voorkomt login/alert-tag errors in de OpenMRS logs.
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/openmrs/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/openmrs/scripts/jquery/jquery.min.js"]
       interval: 15s
       timeout: 10s
       retries: 20
@@ -107,8 +146,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      # OpenMRS wordt pas minuten later "healthy"; comm-module kan al starten en
-      # FHIR-calls retrien (Spring health blijft ok). Prometheus/Grafana volgen.
+      # OpenMRS wordt pas minuten later "healthy"; comm-module mag al starten.
+      # FHIR: wacht op seed (die pollt tot /metadata bereikbaar is) — HAPI heeft 1–3 min nodig.
+      fhir-r5-seed:
+        condition: service_completed_successfully
       openmrs:
         condition: service_started
       otel-collector:
@@ -123,12 +164,23 @@ services:
       SPRING_RABBITMQ_PORT: ${SPRING_RABBITMQ_PORT:?Zie .env.example}
       SPRING_RABBITMQ_USERNAME: ${SPRING_RABBITMQ_USERNAME:?Zie .env.example}
       SPRING_RABBITMQ_PASSWORD: ${SPRING_RABBITMQ_PASSWORD:?Zie .env.example}
-      # Basis-URL; FHIR R4: /ws/fhir2/R4 (Encounter i.p.v. Appointment in standaard FHIR2)
+      # FHIR R5 REST-base (HAPI in compose); geen OpenMRS FHIR2-module nodig
       OPENMRS_URL: ${OPENMRS_URL:?Zie .env.example}
-      # Zelfde host/poort als OPENMRS_URL; aparte base voor FHIR REST (Spring leest dit uit env)
       OPENMRS_FHIR_SERVER_URL: ${OPENMRS_FHIR_SERVER_URL:?Zie .env.example}
-      OPENMRS_FHIR_USERNAME: ${OPENMRS_FHIR_USERNAME:?Zie .env.example}
-      OPENMRS_FHIR_PASSWORD: ${OPENMRS_FHIR_PASSWORD:?Zie .env.example}
+      OPENMRS_FHIR_USERNAME: ${OPENMRS_FHIR_USERNAME:-}
+      OPENMRS_FHIR_PASSWORD: ${OPENMRS_FHIR_PASSWORD:-}
+      OPENMRS_FHIR_ORGANISATION_ID: ${OPENMRS_FHIR_ORGANISATION_ID:-default}
+      OPENMRS_FHIR_POLL_INTERVAL_MINUTES: ${OPENMRS_FHIR_POLL_INTERVAL_MINUTES:-1}
+      OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED: ${OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED:-true}
+      OPENMRS_SCHEDULING_FHIR_SYNC_INTERVAL_MINUTES: ${OPENMRS_SCHEDULING_FHIR_SYNC_INTERVAL_MINUTES:-1}
+      OPENMRS_SCHEDULING_SYNC_ZONE: ${OPENMRS_SCHEDULING_SYNC_ZONE:-Europe/Amsterdam}
+      OPENMRS_SCHEDULING_SYNC_FALLBACK_PHONE: ${OPENMRS_SCHEDULING_SYNC_FALLBACK_PHONE:-+31612345678}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?Zie .env.example}
+      COMM_NOTIFICATION_SCHEDULER_ENABLED: ${COMM_NOTIFICATION_SCHEDULER_ENABLED:-true}
+      COMM_NOTIFICATION_SCHEDULER_CHECK_INTERVAL_MINUTES: ${COMM_NOTIFICATION_SCHEDULER_CHECK_INTERVAL_MINUTES:-1}
+      COMM_NOTIFICATION_REMINDER_LEAD_HOURS: ${COMM_NOTIFICATION_REMINDER_LEAD_HOURS:-24}
+      COMM_NOTIFICATION_REMINDER_WINDOW_MINUTES: ${COMM_NOTIFICATION_REMINDER_WINDOW_MINUTES:-60}
+      COMM_NOTIFICATION_REMINDER_ZONE: ${COMM_NOTIFICATION_REMINDER_ZONE:-Europe/Amsterdam}
       PROVIDERS_BASE_URL: ${PROVIDERS_BASE_URL:-http://fakecomworld:8080}
       PROVIDERS_STUDENT_GROUP: ${PROVIDERS_STUDENT_GROUP:-group-c8}
       SWIFTSEND_API_KEY: ${SWIFTSEND_API_KEY:-your-api-key-here}

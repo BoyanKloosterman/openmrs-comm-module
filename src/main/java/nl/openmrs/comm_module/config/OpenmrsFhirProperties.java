@@ -11,13 +11,13 @@ import java.util.Map;
 @ConfigurationProperties(prefix = "openmrs.fhir")
 public class OpenmrsFhirProperties {
 
-    /** Sleutel voor deze FHIR-bron (tenant); komt terug in polled_encounter.organisation_id. */
+    /** Sleutel voor deze FHIR-bron (tenant); komt terug in polled_appointment.organisation_id. */
     private String organisationId = "default";
 
     /** Fallback als er geen override voor organisationId is. */
     private int pollIntervalMinutes = 1;
 
-    private int encounterPollSinceDays = 30;
+    private int appointmentPollSinceDays = 30;
 
     /** Optioneel per organisatie: eigen poll-interval (US-003-8). */
     private Map<String, OrganisationPollSettings> organisations = new LinkedHashMap<>();
@@ -49,12 +49,12 @@ public class OpenmrsFhirProperties {
         this.pollIntervalMinutes = pollIntervalMinutes;
     }
 
-    public int getEncounterPollSinceDays() {
-        return encounterPollSinceDays;
+    public int getAppointmentPollSinceDays() {
+        return appointmentPollSinceDays;
     }
 
-    public void setEncounterPollSinceDays(int encounterPollSinceDays) {
-        this.encounterPollSinceDays = encounterPollSinceDays;
+    public void setAppointmentPollSinceDays(int appointmentPollSinceDays) {
+        this.appointmentPollSinceDays = appointmentPollSinceDays;
     }
 
     public Map<String, OrganisationPollSettings> getOrganisations() {

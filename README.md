@@ -119,6 +119,8 @@ java -jar target/comm-module-0.0.1-SNAPSHOT.jar
 ./mvnw test
 ```
 
+Scheduling (24u-herinnering) end-to-end in Docker: zie [docs/docker-scheduling-test.md](docs/docker-scheduling-test.md).
+
 ## Projectstructuur
 
 - `src/main/java/nl/openmrs/comm_module` — applicatiecode

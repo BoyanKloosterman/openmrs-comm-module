@@ -1,0 +1,6 @@
+{
+  "resourceType": "Patient",
+  "id": "patient-docker-1",
+  "name": [{ "family": "Jansen", "given": ["Jan"] }],
+  "telecom": [{ "system": "phone", "value": "+31612345678" }]
+}

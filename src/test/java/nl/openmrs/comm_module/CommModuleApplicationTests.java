@@ -1,5 +1,6 @@
 package nl.openmrs.comm_module;
 
+import nl.openmrs.comm_module.scheduling.NotificationScheduler;
 import nl.openmrs.comm_module.scheduling.OpenmrsFhirPollingService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,6 +13,10 @@ class CommModuleApplicationTests {
 	@MockitoBean
 	@SuppressWarnings("unused")
 	private OpenmrsFhirPollingService openmrsFhirPollingService;
+
+	@MockitoBean
+	@SuppressWarnings("unused")
+	private NotificationScheduler notificationScheduler;
 
 	@Test
 	void contextLoads() {

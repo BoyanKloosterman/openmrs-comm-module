@@ -1,0 +1,54 @@
+package nl.openmrs.comm_module.notification;
+
+import nl.openmrs.comm_module.config.NotificationSchedulerProperties;
+import nl.openmrs.comm_module.config.OpenmrsFhirProperties;
+import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
+import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
+import org.springframework.stereotype.Service;
+
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
+/** US-001-2: ophalen welke polled appointments ~24 uur voor start in het venster vallen. */
+@Service
+public class AppointmentReminderQueryService {
+
+    private final PolledAppointmentRepository polledAppointmentRepository;
+    private final OpenmrsFhirProperties fhirProperties;
+    private final NotificationSchedulerProperties schedulerProperties;
+    private final AppointmentReminderEligibilityService eligibilityService;
+    private final Clock clock;
+
+    public AppointmentReminderQueryService(
+            PolledAppointmentRepository polledAppointmentRepository,
+            OpenmrsFhirProperties fhirProperties,
+            NotificationSchedulerProperties schedulerProperties,
+            AppointmentReminderEligibilityService eligibilityService,
+            Clock clock) {
+        this.polledAppointmentRepository = polledAppointmentRepository;
+        this.fhirProperties = fhirProperties;
+        this.schedulerProperties = schedulerProperties;
+        this.eligibilityService = eligibilityService;
+        this.clock = clock;
+    }
+
+    public List<PolledAppointmentEntity> findAppointmentsDueFor24HourReminder() {
+        Instant now = clock.instant();
+        int leadHours = Math.max(0, schedulerProperties.getReminderLeadHours());
+        int windowMinutes = Math.max(1, schedulerProperties.getReminderWindowMinutes());
+        Duration halfWindow = Duration.ofMinutes(windowMinutes / 2L);
+
+        Instant target = now.plus(Duration.ofHours(leadHours));
+        Instant windowStart = target.minus(halfWindow);
+        Instant windowEnd = target.plus(halfWindow);
+
+        return polledAppointmentRepository
+                .findDueForReminderWindow(
+                        fhirProperties.getOrganisationId(), now, windowStart, windowEnd)
+                .stream()
+                .filter(a -> eligibilityService.maySend24HourReminder(a, now))
+                .toList();
+    }
+}
