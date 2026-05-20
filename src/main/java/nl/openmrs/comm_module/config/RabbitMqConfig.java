@@ -9,7 +9,6 @@ import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.beans.factory.annotation.Value;
 
 @Configuration
 public class RabbitMqConfig {
@@ -92,36 +91,32 @@ public class RabbitMqConfig {
     }
 
     @Bean("swiftSendRetryQueue")
-    public Queue swiftSendRetryQueue(@Value("${messaging.retry.delay-ms}") int retryDelayMs) {
+    public Queue swiftSendRetryQueue() {
         return QueueBuilder.durable(SWIFTSEND_RETRY_QUEUE)
-                .ttl(retryDelayMs)
                 .deadLetterExchange(PROVIDER_EXCHANGE)
                 .deadLetterRoutingKey(SWIFTSEND_ROUTING_KEY)
                 .build();
     }
 
     @Bean("securePostRetryQueue")
-    public Queue securePostRetryQueue(@Value("${messaging.retry.delay-ms}") int retryDelayMs) {
+    public Queue securePostRetryQueue() {
         return QueueBuilder.durable(SECUREPOST_RETRY_QUEUE)
-                .ttl(retryDelayMs)
                 .deadLetterExchange(PROVIDER_EXCHANGE)
                 .deadLetterRoutingKey(SECUREPOST_ROUTING_KEY)
                 .build();
     }
 
     @Bean("legacyLinkRetryQueue")
-    public Queue legacyLinkRetryQueue(@Value("${messaging.retry.delay-ms}") int retryDelayMs) {
+    public Queue legacyLinkRetryQueue() {
         return QueueBuilder.durable(LEGACYLINK_RETRY_QUEUE)
-                .ttl(retryDelayMs)
                 .deadLetterExchange(PROVIDER_EXCHANGE)
                 .deadLetterRoutingKey(LEGACYLINK_ROUTING_KEY)
                 .build();
     }
 
     @Bean("asyncFlowRetryQueue")
-    public Queue asyncFlowRetryQueue(@Value("${messaging.retry.delay-ms}") int retryDelayMs) {
+    public Queue asyncFlowRetryQueue() {
         return QueueBuilder.durable(ASYNCFLOW_RETRY_QUEUE)
-                .ttl(retryDelayMs)
                 .deadLetterExchange(PROVIDER_EXCHANGE)
                 .deadLetterRoutingKey(ASYNCFLOW_ROUTING_KEY)
                 .build();

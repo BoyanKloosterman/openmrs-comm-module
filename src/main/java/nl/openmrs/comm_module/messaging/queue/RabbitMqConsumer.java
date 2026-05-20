@@ -1,6 +1,5 @@
 package nl.openmrs.comm_module.messaging.queue;
 
-import nl.openmrs.comm_module.common.exception.NotificationRetryExhaustedException;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.provider.MessagingProvider;
