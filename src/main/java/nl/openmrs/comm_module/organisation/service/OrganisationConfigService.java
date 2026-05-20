@@ -9,7 +9,7 @@ import nl.openmrs.comm_module.persistence.entity.OrganisationConfigEntity;
 import nl.openmrs.comm_module.persistence.entity.OrganisationProviderConfigEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import nl.openmrs.comm_module.common.encryption.PgCryptoService;
 import java.util.Comparator;
 import java.util.List;
 
@@ -17,9 +17,14 @@ import java.util.List;
 public class OrganisationConfigService {
 
     private final OrganisationConfigRepository organisationConfigRepository;
+    private final PgCryptoService pgCryptoService;
 
-    public OrganisationConfigService(OrganisationConfigRepository organisationConfigRepository) {
+    public OrganisationConfigService(
+            OrganisationConfigRepository organisationConfigRepository,
+            PgCryptoService pgCryptoService
+    ) {
         this.organisationConfigRepository = organisationConfigRepository;
+        this.pgCryptoService = pgCryptoService;
     }
 
     @Transactional
@@ -34,11 +39,13 @@ public class OrganisationConfigService {
         entity.getProviders().clear();
 
         for (OrganisationProviderConfigRequest providerRequest : request.getProviders()) {
+            String encryptedCredentials = pgCryptoService.encrypt(providerRequest.getCredentials());
+
             OrganisationProviderConfigEntity providerEntity = new OrganisationProviderConfigEntity(
                     providerRequest.getProviderType(),
                     providerRequest.isEnabled(),
                     providerRequest.getPriority(),
-                    providerRequest.getCredentials()
+                    encryptedCredentials
             );
 
             entity.addProvider(providerEntity);
