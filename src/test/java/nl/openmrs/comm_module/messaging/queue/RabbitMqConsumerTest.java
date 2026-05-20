@@ -1,6 +1,7 @@
 package nl.openmrs.comm_module.messaging.queue;
 
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
+import nl.openmrs.comm_module.metrics.MessagingMetrics;
 import nl.openmrs.comm_module.provider.MessagingProvider;
 import nl.openmrs.comm_module.provider.MessagingProviderFactory;
 import nl.openmrs.comm_module.provider.MessagingProviderType;
@@ -20,6 +21,7 @@ class RabbitMqConsumerTest {
     private MessagingProviderFactory providerFactory;
     private RabbitMqProducer rabbitMqProducer;
     private MessagingProvider messagingProvider;
+        private MessagingMetrics metrics;
     private RabbitMqConsumer rabbitMqConsumer;
 
     @BeforeEach
@@ -27,10 +29,12 @@ class RabbitMqConsumerTest {
         providerFactory = mock(MessagingProviderFactory.class);
         rabbitMqProducer = mock(RabbitMqProducer.class);
         messagingProvider = mock(MessagingProvider.class);
+        metrics = mock(MessagingMetrics.class);
 
         rabbitMqConsumer = new RabbitMqConsumer(
                 providerFactory,
                 rabbitMqProducer,
+                metrics,
                 3
         );
     }

@@ -1,6 +1,7 @@
 package nl.openmrs.comm_module.messaging.queue;
 
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
+import nl.openmrs.comm_module.metrics.MessagingMetrics;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.provider.MessagingProvider;
 import nl.openmrs.comm_module.provider.MessagingProviderFactory;
@@ -14,23 +15,29 @@ public class RabbitMqConsumer {
 
     private final MessagingProviderFactory providerFactory;
     private final RabbitMqProducer rabbitMqProducer;
+    private final MessagingMetrics metrics;
     private final int maxAttempts;
 
     public RabbitMqConsumer(
             MessagingProviderFactory providerFactory,
             RabbitMqProducer rabbitMqProducer,
+            MessagingMetrics metrics,
             @Value("${messaging.retry.max-attempts}") int maxAttempts
     ) {
         this.providerFactory = providerFactory;
         this.rabbitMqProducer = rabbitMqProducer;
+        this.metrics = metrics;
         this.maxAttempts = maxAttempts;
     }
 
     @RabbitListener(queues = "#{'${messaging.queues}'.split(',')}")
     public void consume(NotificationQueueMessage message) {
+        metrics.recordDequeued(message);
         MessagingProvider provider = providerFactory.getProvider(message.getProvider());
 
         ProviderSendResult result = provider.sendMessage(message);
+
+        metrics.recordSendResult(message, result);
 
         logResult(message, result);
 
