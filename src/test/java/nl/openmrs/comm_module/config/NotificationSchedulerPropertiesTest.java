@@ -24,6 +24,7 @@ class NotificationSchedulerPropertiesTest {
     void reminderDefaults() {
         NotificationSchedulerProperties p = new NotificationSchedulerProperties();
         assertEquals(24, p.getReminderLeadHours());
+        assertEquals(1, p.getReminder1LeadHours());
         assertEquals(60, p.getReminderWindowMinutes());
     }
 }

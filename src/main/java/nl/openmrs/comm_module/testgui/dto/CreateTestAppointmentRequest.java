@@ -5,4 +5,6 @@ public record CreateTestAppointmentRequest(
         String locationUuid,
         String reason,
         Boolean runSyncAfter,
-        Boolean runPollAfter) {}
+        Boolean runPollAfter,
+        /** Lead-uren voor afspraakstart; null = 24 (US-001-test), 1 = 1u-venster (US-002). */
+        Integer leadHours) {}

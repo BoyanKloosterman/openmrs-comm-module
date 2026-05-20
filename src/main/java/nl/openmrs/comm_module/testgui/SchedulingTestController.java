@@ -54,8 +54,9 @@ public class SchedulingTestController {
         String reason = body != null ? body.reason() : null;
         boolean runSync = body == null || body.runSyncAfter() == null || body.runSyncAfter();
         boolean runPoll = body == null || body.runPollAfter() == null || body.runPollAfter();
+        Integer leadHours = body != null ? body.leadHours() : null;
         return testService.createTestAppointment(
-                patientUuid, locationUuid, reason, runSync, runPoll, provider);
+                patientUuid, locationUuid, reason, runSync, runPoll, leadHours, provider);
     }
 
     @PostMapping("/appointments/{appointmentFhirId}/cancel")
@@ -72,21 +73,27 @@ public class SchedulingTestController {
     }
 
     @PostMapping("/scheduler")
-    public SchedulerRunResultDto scheduler(@RequestParam(required = false) String provider) {
-        return testService.triggerScheduler(provider);
+    public SchedulerRunResultDto scheduler(
+            @RequestParam(required = false) String provider,
+            @RequestParam(required = false) String reminder) {
+        return testService.triggerScheduler(provider, ReminderKind.parse(reminder));
     }
 
     @PostMapping("/appointments/{appointmentFhirId}/scheduler")
     public SchedulerRunResultDto schedulerForAppointment(
             @PathVariable String appointmentFhirId,
-            @RequestParam(required = false) String provider) {
-        return testService.triggerSchedulerForAppointment(appointmentFhirId, provider);
+            @RequestParam(required = false) String provider,
+            @RequestParam(required = false) String reminder) {
+        return testService.triggerSchedulerForAppointment(
+                appointmentFhirId, provider, ReminderKind.parse(reminder));
     }
 
     @GetMapping("/appointments/{appointmentFhirId}/message-preview")
-    public ResponseEntity<MessagePreviewDto> messagePreview(@PathVariable String appointmentFhirId) {
+    public ResponseEntity<MessagePreviewDto> messagePreview(
+            @PathVariable String appointmentFhirId,
+            @RequestParam(required = false) String reminder) {
         return testService
-                .previewMessage(appointmentFhirId)
+                .previewMessage(appointmentFhirId, ReminderKind.parse(reminder))
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }

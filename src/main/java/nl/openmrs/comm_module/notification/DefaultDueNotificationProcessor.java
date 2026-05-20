@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
-/** Query (001-2) en queue (001-3) voor 24u-herinneringen. */
+/** US-001/002: 24u- en 1u-herinneringen in één scheduler-tick. */
 @Component
 public class DefaultDueNotificationProcessor implements DueNotificationProcessor {
 
@@ -25,9 +25,19 @@ public class DefaultDueNotificationProcessor implements DueNotificationProcessor
 
     @Override
     public void processDueNotifications() {
-        List<PolledAppointmentEntity> due =
+        List<PolledAppointmentEntity> due24 =
                 appointmentReminderQueryService.findAppointmentsDueFor24HourReminder();
-        int queued = appointmentReminderPublisher.publish24HourReminders(due);
-        log.info("24u-herinnering: {} in venster, {} op queue gezet", due.size(), queued);
+        int queued24 = appointmentReminderPublisher.publish24HourReminders(due24);
+
+        List<PolledAppointmentEntity> due1 =
+                appointmentReminderQueryService.findAppointmentsDueFor1HourReminder();
+        int queued1 = appointmentReminderPublisher.publish1HourReminders(due1);
+
+        log.info(
+                "Herinneringen: 24u {} in venster / {} queue; 1u {} in venster / {} queue",
+                due24.size(),
+                queued24,
+                due1.size(),
+                queued1);
     }
 }
