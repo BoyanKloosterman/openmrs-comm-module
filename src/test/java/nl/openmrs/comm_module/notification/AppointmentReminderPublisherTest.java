@@ -44,8 +44,8 @@ class AppointmentReminderPublisherTest {
         NotificationQueueMessage msg = new NotificationQueueMessage();
         msg.setNotificationId(java.util.UUID.randomUUID());
 
-        when(eligibilityService.maySend24HourReminder(withPhone)).thenReturn(true);
-        when(eligibilityService.maySend24HourReminder(noPhone)).thenReturn(true);
+        when(eligibilityService.maySendReminder(withPhone)).thenReturn(true);
+        when(eligibilityService.maySendReminder(noPhone)).thenReturn(true);
         when(deliveryLogService.hasSuccessfulDelivery(any(), any())).thenReturn(false);
         when(messageBuilder.build24HourReminder(withPhone)).thenReturn(Optional.of(msg));
         when(messageBuilder.build24HourReminder(noPhone)).thenReturn(Optional.empty());
@@ -60,7 +60,7 @@ class AppointmentReminderPublisherTest {
     @Test
     void slaatBegonnenAfspraakOver() {
         PolledAppointmentEntity started = appointment("apt-started");
-        when(eligibilityService.maySend24HourReminder(started)).thenReturn(false);
+        when(eligibilityService.maySendReminder(started)).thenReturn(false);
 
         assertEquals(0, publisher.publish24HourReminders(List.of(started)));
 
@@ -72,7 +72,7 @@ class AppointmentReminderPublisherTest {
     @Test
     void slaatOverBijEerderSuccesvolVerstuurd() {
         PolledAppointmentEntity apt = appointment("apt-done");
-        when(eligibilityService.maySend24HourReminder(apt)).thenReturn(true);
+        when(eligibilityService.maySendReminder(apt)).thenReturn(true);
         when(deliveryLogService.hasSuccessfulDelivery("apt-done", AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H))
                 .thenReturn(true);
 
@@ -86,6 +86,21 @@ class AppointmentReminderPublisherTest {
     void publiceertNietsBijLegeLijst() {
         assertEquals(0, publisher.publish24HourReminders(List.of()));
         verify(rabbitMqProducer, never()).publish(any());
+    }
+
+    @Test
+    void publiceert1uOokAls24uAlVerstuurd() {
+        PolledAppointmentEntity apt = appointment("apt-1h");
+        NotificationQueueMessage msg = new NotificationQueueMessage();
+        msg.setNotificationId(java.util.UUID.randomUUID());
+
+        when(eligibilityService.maySendReminder(apt)).thenReturn(true);
+        when(deliveryLogService.hasSuccessfulDelivery("apt-1h", AppointmentReminderMessageBuilder.MESSAGE_TYPE_1H))
+                .thenReturn(false);
+        when(messageBuilder.build1HourReminder(apt)).thenReturn(Optional.of(msg));
+
+        assertEquals(1, publisher.publish1HourReminders(List.of(apt)));
+        verify(rabbitMqProducer).publish(msg);
     }
 
     private static PolledAppointmentEntity appointment(String fhirId) {

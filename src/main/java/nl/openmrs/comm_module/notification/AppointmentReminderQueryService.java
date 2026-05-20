@@ -11,7 +11,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
-/** US-001-2: ophalen welke polled appointments ~24 uur voor start in het venster vallen. */
+/** US-001-2 / US-002-1: appointments in herinneringsvenster (~24u of ~1u). */
 @Service
 public class AppointmentReminderQueryService {
 
@@ -35,8 +35,15 @@ public class AppointmentReminderQueryService {
     }
 
     public List<PolledAppointmentEntity> findAppointmentsDueFor24HourReminder() {
+        return findAppointmentsDueForReminder(Math.max(0, schedulerProperties.getReminderLeadHours()));
+    }
+
+    public List<PolledAppointmentEntity> findAppointmentsDueFor1HourReminder() {
+        return findAppointmentsDueForReminder(Math.max(0, schedulerProperties.getReminder1LeadHours()));
+    }
+
+    public List<PolledAppointmentEntity> findAppointmentsDueForReminder(int leadHours) {
         Instant now = clock.instant();
-        int leadHours = Math.max(0, schedulerProperties.getReminderLeadHours());
         int windowMinutes = Math.max(1, schedulerProperties.getReminderWindowMinutes());
         Duration halfWindow = Duration.ofMinutes(windowMinutes / 2L);
 
@@ -48,7 +55,7 @@ public class AppointmentReminderQueryService {
                 .findDueForReminderWindow(
                         fhirProperties.getOrganisationId(), now, windowStart, windowEnd)
                 .stream()
-                .filter(a -> eligibilityService.maySend24HourReminder(a, now))
+                .filter(a -> eligibilityService.maySendReminder(a, now))
                 .toList();
     }
 }

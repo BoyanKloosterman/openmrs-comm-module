@@ -18,6 +18,10 @@ public record PolledAppointmentViewDto(
         AppointmentWindowStatus windowStatus,
         boolean inReminderWindow,
         boolean alreadySentSuccessfully,
+        AppointmentWindowStatus oneHourWindowStatus,
+        boolean inOneHourReminderWindow,
+        boolean alreadySentOneHourSuccessfully,
         String testMessagingProvider,
         String lastDeliveryProvider,
-        MessagePreviewDto messagePreview) {}
+        MessagePreviewDto messagePreview,
+        MessagePreviewDto oneHourMessagePreview) {}

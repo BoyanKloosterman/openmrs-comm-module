@@ -4,15 +4,18 @@ import nl.openmrs.comm_module.provider.MessagingProviderType;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-/** US-001-1/2: scheduler-interval en 24u-herinneringsvenster. */
+/** US-001/002: scheduler-interval en herinneringsvensters (24u + 1u). */
 @Component("notificationSchedulerProperties")
 @ConfigurationProperties(prefix = "comm.notification.scheduler")
 public class NotificationSchedulerProperties {
 
     private boolean enabled = true;
 
-    /** Uren voor de afspraak dat de herinnering hoort (US-001: 24). */
+    /** Uren voor de afspraak dat de 24u-herinnering hoort (US-001). */
     private int reminderLeadHours = 24;
+
+    /** Uren voor de afspraak dat de 1u-herinnering hoort (US-002). */
+    private int reminder1LeadHours = 1;
 
     /** Breedte venster rond doeltijd; scheduler hoeft niet exact op de minuut te raken. */
     private int reminderWindowMinutes = 60;
@@ -47,6 +50,14 @@ public class NotificationSchedulerProperties {
 
     public void setReminderLeadHours(int reminderLeadHours) {
         this.reminderLeadHours = reminderLeadHours;
+    }
+
+    public int getReminder1LeadHours() {
+        return reminder1LeadHours;
+    }
+
+    public void setReminder1LeadHours(int reminder1LeadHours) {
+        this.reminder1LeadHours = reminder1LeadHours;
     }
 
     public int getReminderWindowMinutes() {

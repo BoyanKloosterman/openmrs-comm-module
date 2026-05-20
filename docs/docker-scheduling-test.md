@@ -96,7 +96,9 @@ Kies **één** van de twee methoden.
 docker exec -it comm-module-db psql -U openmrs_user -d openmrs
 ```
 
-2. **Snelle test (lead = 1 uur):** zet appointment op nu + 1u5m in UTC:
+2. **1u-herinnering (US-002):** open `http://localhost:8080/test-scheduling.html`, kies modus **1 uur**, boek met **Afspraak in 1u-venster** of **Scheduler nu**. Config: `COMM_NOTIFICATION_REMINDER_1_LEAD_HOURS=1` (default).
+
+3. **Snelle test (lead = 1 uur):** zet appointment op nu + 1u5m in UTC:
 
 ```sql
 INSERT INTO polled_appointment (

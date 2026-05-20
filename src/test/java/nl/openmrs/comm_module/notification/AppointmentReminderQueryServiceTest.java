@@ -1,5 +1,7 @@
 package nl.openmrs.comm_module.notification;
 
+import nl.openmrs.comm_module.messaging.queue.RabbitMqConsumer;
+import nl.openmrs.comm_module.messaging.queue.RabbitMqProducer;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
 import nl.openmrs.comm_module.scheduling.NotificationScheduler;
@@ -37,6 +39,14 @@ class AppointmentReminderQueryServiceTest {
 
     @MockitoBean
     private Clock clock;
+
+    @MockitoBean
+    @SuppressWarnings("unused")
+    private RabbitMqProducer rabbitMqProducer;
+
+    @MockitoBean
+    @SuppressWarnings("unused")
+    private RabbitMqConsumer rabbitMqConsumer;
 
     @Autowired
     private PolledAppointmentRepository repository;
@@ -91,6 +101,17 @@ class AppointmentReminderQueryServiceTest {
 
         assertEquals(1, due.size());
         assertEquals("apt-in", due.get(0).getAppointmentFhirId());
+    }
+
+    @Test
+    void vindtAppointmentIn1uVenster() {
+        save(ORG, "apt-1h-in", Instant.parse("2026-05-18T11:05:00Z"), false);
+        save(ORG, "apt-1h-far", Instant.parse("2026-05-19T10:00:00Z"), false);
+
+        List<PolledAppointmentEntity> due = queryService.findAppointmentsDueFor1HourReminder();
+
+        assertEquals(1, due.size());
+        assertEquals("apt-1h-in", due.get(0).getAppointmentFhirId());
     }
 
     private void save(String organisationId, String appointmentFhirId, Instant appointmentDatetime, boolean voided) {

@@ -8,6 +8,7 @@ public record SchedulingTestStatusDto(
         String organisationId,
         boolean schedulerEnabled,
         int reminderLeadHours,
+        int reminder1LeadHours,
         int reminderWindowMinutes,
         int schedulerCheckIntervalMinutes,
         int fhirPollIntervalMinutes,
@@ -15,4 +16,6 @@ public record SchedulingTestStatusDto(
         String defaultProvider,
         List<String> availableProviders,
         ReminderWindowDto reminderWindow,
-        int appointmentsCurrentlyInWindow) {}
+        int appointmentsCurrentlyInWindow,
+        ReminderWindowDto oneHourReminderWindow,
+        int appointmentsCurrentlyIn1hWindow) {}

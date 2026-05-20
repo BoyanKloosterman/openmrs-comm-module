@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-/** Zet 24u-herinneringen op RabbitMQ (US-001-3); US-001-4 check vlak voor queue. */
+/** Zet 24u- en 1u-herinneringen op RabbitMQ (US-001-3 / US-002). */
 @Service
 public class AppointmentReminderPublisher {
 
@@ -39,25 +39,57 @@ public class AppointmentReminderPublisher {
     /** Optionele provider voor test-GUI; null = default uit scheduler-config. */
     public int publish24HourReminders(
             List<PolledAppointmentEntity> appointments, MessagingProviderType providerOverride) {
+        return publishReminders(
+                appointments,
+                providerOverride,
+                AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H,
+                "24u",
+                messageBuilder::build24HourReminder);
+    }
+
+    public int publish1HourReminders(List<PolledAppointmentEntity> appointments) {
+        return publish1HourReminders(appointments, null);
+    }
+
+    /** Optionele provider voor test-GUI; null = default uit scheduler-config. */
+    public int publish1HourReminders(
+            List<PolledAppointmentEntity> appointments, MessagingProviderType providerOverride) {
+        return publishReminders(
+                appointments,
+                providerOverride,
+                AppointmentReminderMessageBuilder.MESSAGE_TYPE_1H,
+                "1u",
+                messageBuilder::build1HourReminder);
+    }
+
+    private int publishReminders(
+            List<PolledAppointmentEntity> appointments,
+            MessagingProviderType providerOverride,
+            String messageType,
+            String logLabel,
+            java.util.function.Function<PolledAppointmentEntity, java.util.Optional<NotificationQueueMessage>>
+                    buildMessage) {
         int queued = 0;
         for (PolledAppointmentEntity appointment : appointments) {
-            if (!eligibilityService.maySend24HourReminder(appointment)) {
+            if (!eligibilityService.maySendReminder(appointment)) {
                 log.info(
-                        "24u-herinnering overgeslagen voor {}: afspraak al begonnen of geannuleerd",
+                        "{}-herinnering overgeslagen voor {}: afspraak al begonnen of geannuleerd",
+                        logLabel,
                         appointment.getAppointmentFhirId());
                 continue;
             }
-            if (deliveryLogService.hasSuccessfulDelivery(
-                    appointment.getAppointmentFhirId(), AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H)) {
+            if (deliveryLogService.hasSuccessfulDelivery(appointment.getAppointmentFhirId(), messageType)) {
                 log.debug(
-                        "24u-herinnering overgeslagen voor {}: al eerder succesvol verstuurd",
+                        "{}-herinnering overgeslagen voor {}: al eerder succesvol verstuurd",
+                        logLabel,
                         appointment.getAppointmentFhirId());
                 continue;
             }
-            var messageOpt = messageBuilder.build24HourReminder(appointment);
+            var messageOpt = buildMessage.apply(appointment);
             if (messageOpt.isEmpty()) {
                 log.warn(
-                        "Geen herinnering voor appointment {}: ontbrekend telefoonnummer",
+                        "Geen {}-herinnering voor appointment {}: ontbrekend telefoonnummer",
+                        logLabel,
                         appointment.getAppointmentFhirId());
                 continue;
             }
@@ -69,7 +101,8 @@ public class AppointmentReminderPublisher {
             deliveryLogService.recordQueued(message);
             queued++;
             log.info(
-                    "24u-herinnering in queue: notificationId={} appointment={} naar {}",
+                    "{}-herinnering in queue: notificationId={} appointment={} naar {}",
+                    logLabel,
                     message.getNotificationId(),
                     appointment.getAppointmentFhirId(),
                     message.getRecipient());

@@ -53,6 +53,20 @@ class AppointmentReminderMessageBuilderTest {
     }
 
     @Test
+    void bouwt1uBerichtMetZelfdeVelden() {
+        when(fhirOperations.readAppointmentByLogicalId(eq("apt-1"))).thenReturn(Optional.empty());
+        PolledAppointmentEntity appointment = appointment(
+                "+31612345678", "Jan de Vries", Instant.parse("2026-05-19T14:30:00Z"), "poli-2", "Controle");
+
+        var message = builder.build1HourReminder(appointment).orElseThrow();
+
+        assertEquals(AppointmentReminderMessageBuilder.MESSAGE_TYPE_1H, message.getMessageType());
+        assertTrue(message.getSubject().contains("1 uur"));
+        assertTrue(message.getBody().contains("over 1 uur"));
+        assertTrue(message.getBody().contains("poli-2"));
+    }
+
+    @Test
     void leegBijOntbrekendTelefoonnummer() {
         PolledAppointmentEntity appointment = appointment(null, "Jan", Instant.now(), "loc", null);
         assertTrue(builder.build24HourReminder(appointment).isEmpty());

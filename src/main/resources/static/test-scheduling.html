@@ -153,22 +153,29 @@
 <body>
   <header>
     <h1>Scheduling &amp; messaging — testconsole</h1>
-    <p>Alleen voor ontwikkeling. Boekt in <strong>OpenMRS</strong> (bestaande patiënt) op <strong>nu + lead-uren + 5 min</strong>, sync → FHIR → poll, en toont venster/queue/bericht met OpenMRS-reden.</p>
+    <p>Alleen voor ontwikkeling. Test <strong>24u-</strong> en <strong>1u-herinneringen</strong> (US-001/002): boek op nu + lead + 5 min, sync → FHIR → poll, scheduler en berichtpreview.</p>
   </header>
   <main>
     <div class="grid grid-2" style="margin-bottom: 1rem;">
       <section class="card">
         <h2>Scheduler-configuratie</h2>
+        <label for="reminder-mode">Herinnering testen</label>
+        <select id="reminder-mode">
+          <option value="24h">24 uur (US-001)</option>
+          <option value="1h" selected>1 uur (US-002)</option>
+        </select>
         <dl class="status-grid" id="status-grid"></dl>
         <div class="window-bar" title="Herinneringsvenster (UTC)"><div class="window-fill" id="window-fill" style="width:0%"></div></div>
         <p class="empty" id="window-desc"></p>
+        <p class="empty" id="window-desc-alt" hidden></p>
         <label for="provider-select">Messaging provider (queue)</label>
         <select id="provider-select"><option value="">— laden… —</option></select>
         <p class="empty" style="margin-top: 0.35rem;">Provider wordt per afspraak opgeslagen (bij boeken of bij wijziging hier). <em>Scheduler nu</em> = alle in venster; <em>Verstuur geselecteerde</em> = één rij. Achtergrond-scheduler = altijd default.</p>
         <div class="btn-row">
           <button type="button" class="btn-secondary" id="btn-refresh">Vernieuwen</button>
           <button type="button" class="btn-secondary" id="btn-poll">Poll nu</button>
-          <button type="button" class="btn-secondary" id="btn-scheduler">Scheduler nu (alle)</button>
+          <button type="button" class="btn-secondary" id="btn-scheduler">Scheduler nu (modus)</button>
+          <button type="button" class="btn-secondary" id="btn-scheduler-all">Scheduler 24u+1u</button>
           <button type="button" class="btn-secondary" id="btn-scheduler-one" disabled>Verstuur geselecteerde</button>
         </div>
         <div class="auto" style="margin-top: 0.75rem;">
@@ -186,7 +193,8 @@
         <label><input type="checkbox" id="run-sync" checked> Direct daarna OpenMRS→FHIR sync</label>
         <label><input type="checkbox" id="run-poll" checked> Direct daarna FHIR-pollen</label>
         <div class="btn-row">
-          <button type="button" class="btn-primary" id="btn-create">Afspraak in herinneringsvenster</button>
+          <button type="button" class="btn-primary" id="btn-create">Afspraak in gekozen venster</button>
+          <button type="button" class="btn-secondary" id="btn-create-1h">Afspraak in 1u-venster</button>
         </div>
         <p class="empty" id="create-result"></p>
       </section>
@@ -202,8 +210,10 @@
                 <th>FHIR id</th>
                 <th>Afspraak (UTC)</th>
                 <th>Provider</th>
-                <th>Status</th>
-                <th>Verstuurd</th>
+                <th>24u</th>
+                <th>1u</th>
+                <th>24u verz.</th>
+                <th>1u verz.</th>
               </tr>
             </thead>
             <tbody id="appointments-body"></tbody>
@@ -212,7 +222,7 @@
         <p class="empty" id="appointments-empty">Geen rijen — maak een testafspraak of wacht op poll.</p>
       </section>
       <section class="card">
-        <h2>Bericht (24u-herinnering)</h2>
+        <h2 id="message-title">Bericht (1u-herinnering)</h2>
         <div class="message-meta" id="message-meta">Selecteer een afspraak in de tabel.</div>
         <div class="message-box" id="message-body">—</div>
         <div class="btn-row">
@@ -250,6 +260,21 @@
     let selectedCancellable = false;
     let refreshTimer = null;
     let defaultProvider = 'SWIFTSEND';
+    let lastStatus = null;
+    let lastAppointments = [];
+
+    function getReminderMode() {
+      return document.getElementById('reminder-mode').value;
+    }
+
+    function apiQuery(reminderOverride) {
+      const parts = [];
+      const p = getSelectedProvider();
+      if (p) parts.push('provider=' + encodeURIComponent(p));
+      const rem = reminderOverride != null ? reminderOverride : getReminderMode();
+      if (rem) parts.push('reminder=' + encodeURIComponent(rem));
+      return parts.length ? '?' + parts.join('&') : '';
+    }
 
     function getSelectedProvider() {
       return document.getElementById('provider-select').value || defaultProvider;
@@ -320,13 +345,19 @@
     }
 
     function renderStatus(s) {
-      const w = s.reminderWindow;
+      lastStatus = s;
+      const mode = getReminderMode();
+      const w = mode === '1h' ? s.oneHourReminderWindow : s.reminderWindow;
+      const inWindowCount = mode === '1h' ? s.appointmentsCurrentlyIn1hWindow : s.appointmentsCurrentlyInWindow;
       const items = [
         ['Servertijd (UTC)', fmtInstant(s.serverTime)],
         ['Organisatie', s.organisationId],
-        ['Lead (uren)', s.reminderLeadHours],
+        ['Lead 24u (uren)', s.reminderLeadHours],
+        ['Lead 1u (uren)', s.reminder1LeadHours],
         ['Venster (min)', s.reminderWindowMinutes],
-        ['In venster nu', s.appointmentsCurrentlyInWindow],
+        ['In venster (' + mode + ')', inWindowCount],
+        ['In venster 24u', s.appointmentsCurrentlyInWindow],
+        ['In venster 1u', s.appointmentsCurrentlyIn1hWindow],
         ['Scheduler', s.schedulerEnabled ? 'aan' : 'uit'],
         ['Check-interval', s.schedulerCheckIntervalMinutes + ' min'],
         ['FHIR-poll', s.fhirPollIntervalMinutes + ' min'],
@@ -335,15 +366,21 @@
       ];
       document.getElementById('status-grid').innerHTML = items
         .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
-      document.getElementById('window-desc').textContent =
-        `Venster UTC: ${fmtInstant(w.windowStart)} t/m ${fmtInstant(w.windowEnd)} ` +
-        `(doel: ${fmtInstant(w.target)}, lead ${w.leadHours}u, breedte ${w.windowMinutes} min)`;
+      const desc = (win, label) =>
+        `${label} UTC: ${fmtInstant(win.windowStart)} t/m ${fmtInstant(win.windowEnd)} ` +
+        `(doel: ${fmtInstant(win.target)}, lead ${win.leadHours}u, breedte ${win.windowMinutes} min)`;
+      document.getElementById('window-desc').textContent = desc(w, 'Actief venster');
+      document.getElementById('window-desc-alt').hidden = false;
+      document.getElementById('window-desc-alt').textContent =
+        '24u: ' + desc(s.reminderWindow, '') + ' | 1u: ' + desc(s.oneHourReminderWindow, '');
       const now = new Date(s.serverTime).getTime();
       const start = new Date(w.windowStart).getTime();
       const end = new Date(w.windowEnd).getTime();
       const span = end - start;
       const pct = span > 0 ? Math.min(100, Math.max(0, ((now - start) / span) * 100)) : 0;
       document.getElementById('window-fill').style.width = pct + '%';
+      document.getElementById('message-title').textContent =
+        mode === '1h' ? 'Bericht (1u-herinnering)' : 'Bericht (24u-herinnering)';
     }
 
     function badgeFor(status, sent) {
@@ -378,7 +415,9 @@
           <td>${fmtInstant(r.appointmentDatetime)}</td>
           <td>${formatProviderCell(r)}</td>
           <td>${badgeFor(r.windowStatus, r.alreadySentSuccessfully)}</td>
+          <td>${badgeFor(r.oneHourWindowStatus, r.alreadySentOneHourSuccessfully)}</td>
           <td>${r.alreadySentSuccessfully ? 'ja' : 'nee'}</td>
+          <td>${r.alreadySentOneHourSuccessfully ? 'ja' : 'nee'}</td>
         </tr>`;
       }).join('');
       body.querySelectorAll('tr').forEach(tr => {
@@ -431,8 +470,15 @@
       if (row?.testMessagingProvider) {
         sel.value = row.testMessagingProvider;
       }
+      lastAppointments = rows;
       renderAppointments(rows);
-      renderMessage(row, row?.messagePreview);
+      renderMessageForMode(row);
+    }
+
+    function renderMessageForMode(row) {
+      const mode = getReminderMode();
+      const preview = mode === '1h' ? row?.oneHourMessagePreview : row?.messagePreview;
+      renderMessage(row, preview);
     }
 
     async function loadPatients() {
@@ -499,6 +545,7 @@
         ]);
         renderStatus(status);
         populateProviderSelect(status);
+        lastAppointments = appointments;
         renderAppointments(appointments);
         if (selectedId) {
           const row = appointments.find(a => a.appointmentFhirId === selectedId);
@@ -509,7 +556,7 @@
           if (row?.testMessagingProvider) {
             document.getElementById('provider-select').value = row.testMessagingProvider;
           }
-          renderMessage(row, row?.messagePreview);
+          renderMessageForMode(row);
         }
         renderLogs(logs);
       } catch (e) {
@@ -527,7 +574,14 @@
     });
     document.getElementById('btn-scheduler').addEventListener('click', async () => {
       try {
-        const r = await api('/scheduler' + providerQuery(), { method: 'POST' });
+        const r = await api('/scheduler' + apiQuery(), { method: 'POST' });
+        showToast(`${r.message} — ${r.queued} bericht(en)`, !r.success);
+        await loadAll();
+      } catch (e) { showToast(e.message, true); }
+    });
+    document.getElementById('btn-scheduler-all').addEventListener('click', async () => {
+      try {
+        const r = await api('/scheduler' + apiQuery('all'), { method: 'POST' });
         showToast(`${r.message} — ${r.queued} bericht(en)`, !r.success);
         await loadAll();
       } catch (e) { showToast(e.message, true); }
@@ -537,14 +591,25 @@
       try {
         await saveProviderForSelected();
         const r = await api(
-          '/appointments/' + encodeURIComponent(selectedId) + '/scheduler' + providerQuery(),
+          '/appointments/' + encodeURIComponent(selectedId) + '/scheduler' + apiQuery(),
           { method: 'POST' }
         );
         showToast(`${r.message} — ${r.provider}`, !r.success);
         await loadAll();
       } catch (e) { showToast(e.message, true); }
     });
-    document.getElementById('btn-create').addEventListener('click', async () => {
+    function buildAppointmentBody(leadHours) {
+      return {
+        patientUuid: document.getElementById('patient-select').value,
+        locationUuid: document.getElementById('location-select').value,
+        reason: document.getElementById('reason').value,
+        runSyncAfter: document.getElementById('run-sync').checked,
+        runPollAfter: document.getElementById('run-poll').checked,
+        leadHours: leadHours
+      };
+    }
+
+    async function createAppointmentWithLead(leadHours, label) {
       const patientUuid = document.getElementById('patient-select').value;
       const locationUuid = document.getElementById('location-select').value;
       if (!patientUuid) {
@@ -555,31 +620,39 @@
         showToast('Kies eerst een locatie uit OpenMRS', true);
         return;
       }
-      const body = {
-        patientUuid,
-        locationUuid,
-        reason: document.getElementById('reason').value,
-        runSyncAfter: document.getElementById('run-sync').checked,
-        runPollAfter: document.getElementById('run-poll').checked
-      };
       try {
         const r = await api('/appointments' + providerQuery(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
+          body: JSON.stringify(buildAppointmentBody(leadHours))
         });
         document.getElementById('create-result').textContent =
           `OpenMRS #${r.openmrsAppointmentId} → ${r.appointmentFhirId} om ${fmtInstant(r.appointmentStart)} ` +
-          `(${r.locationName || 'locatie onbekend'}). ${r.syncNote || ''} ${r.pollNote || ''}`.trim();
+          `(${r.locationName || 'locatie onbekend'}, lead ${leadHours}u). ${r.syncNote || ''} ${r.pollNote || ''}`.trim();
         selectedId = r.appointmentFhirId;
-        showToast('Afspraak geboekt (' + getSelectedProvider() + ')', false);
+        showToast(label + ' (' + getSelectedProvider() + ')', false);
         await loadAll();
         if (r.polledRow) {
           const row = r.polledRow;
           document.getElementById('provider-select').value = row.testMessagingProvider || getSelectedProvider();
-          renderMessage(row, row.messagePreview);
+          renderMessageForMode(row);
         }
       } catch (e) { showToast(e.message, true); }
+    }
+
+    document.getElementById('btn-create').addEventListener('click', async () => {
+      const lead = getReminderMode() === '1h' ? 1 : 24;
+      await createAppointmentWithLead(lead, 'Afspraak geboekt');
+    });
+    document.getElementById('btn-create-1h').addEventListener('click', async () => {
+      document.getElementById('reminder-mode').value = '1h';
+      if (lastStatus) renderStatus(lastStatus);
+      await createAppointmentWithLead(1, '1u-afspraak geboekt');
+    });
+    document.getElementById('reminder-mode').addEventListener('change', () => {
+      if (lastStatus) renderStatus(lastStatus);
+      const row = lastAppointments.find(a => a.appointmentFhirId === selectedId);
+      if (row) renderMessageForMode(row);
     });
     document.getElementById('btn-cancel').addEventListener('click', async () => {
       if (!selectedId || !confirm('Afspraak ' + selectedId + ' annuleren in OpenMRS?')) return;
@@ -617,7 +690,7 @@
         const appointments = await api('/appointments');
         renderAppointments(appointments);
         selectAppointment(selectedId, appointments);
-        if (updated?.messagePreview) renderMessage(updated, updated.messagePreview);
+        if (updated) renderMessageForMode(updated);
       } catch (e) { showToast(e.message, true); }
     });
     document.getElementById('auto-refresh').addEventListener('change', (e) => {
