@@ -10,4 +10,6 @@ public record AppointmentPollDto(
         /** Leesbare locatie (polikliniek/kamer), geen FHIR Location-id. */
         String locationLabel,
         String appointmentType,
+        /** OpenMRS appointment.reason / FHIR extension. */
+        String reason,
         boolean voided) {}

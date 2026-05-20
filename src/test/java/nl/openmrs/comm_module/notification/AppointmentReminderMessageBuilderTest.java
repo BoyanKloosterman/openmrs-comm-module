@@ -59,6 +59,18 @@ class AppointmentReminderMessageBuilderTest {
     }
 
     @Test
+    void gebruiktReasonUitPolledAppointment() {
+        PolledAppointmentEntity appointment = appointment(
+                "+31612345678", "Jan", Instant.parse("2026-05-19T14:30:00Z"), "Poli 2", "Consult");
+        appointment.setAppointmentReason("Nuchter blijven");
+
+        String body = builder.build24HourReminder(appointment).orElseThrow().getBody();
+
+        assertTrue(body.contains("Nuchter blijven"));
+        assertTrue(!body.contains("Standaard ziekenhuisregel"));
+    }
+
+    @Test
     void gebruiktOpenmrsReasonUitFhirInPlaatsVanDefault() {
         NotificationSchedulerProperties props = new NotificationSchedulerProperties();
         props.setDefaultInstructions("Standaard ziekenhuisregel");

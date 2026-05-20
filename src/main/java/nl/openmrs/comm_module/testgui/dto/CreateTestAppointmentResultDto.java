@@ -4,9 +4,11 @@ import java.time.Instant;
 
 public record CreateTestAppointmentResultDto(
         String appointmentFhirId,
+        int openmrsAppointmentId,
         String patientFhirId,
         Instant appointmentStart,
-        String phone,
+        String reason,
         String patientName,
+        String syncNote,
         String pollNote,
         PolledAppointmentViewDto polledRow) {}

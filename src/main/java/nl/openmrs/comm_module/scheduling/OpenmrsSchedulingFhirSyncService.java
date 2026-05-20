@@ -67,8 +67,9 @@ public class OpenmrsSchedulingFhirSyncService {
         }
     }
 
+    /** Handmatig/sync-tick: exporteert gewijzigde OpenMRS-afspraken naar FHIR. */
     @Transactional
-    int runSync() {
+    public int runSync() {
         ZoneId zone = ZoneId.of(properties.getZoneId());
         LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), zone);
         LocalDateTime from = now.minusDays(Math.max(0, properties.getLookbackDays()));

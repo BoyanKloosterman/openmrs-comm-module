@@ -124,6 +124,7 @@ class AppointmentFhirMapperTest {
 
         AppointmentPollDto dto = mapper.map(appointment).orElseThrow();
         assertEquals("Poli A - Kamer 1", dto.locationLabel());
+        assertEquals("Medicijnen meenemen", dto.reason());
     }
 
     private static Appointment appointmentMet(

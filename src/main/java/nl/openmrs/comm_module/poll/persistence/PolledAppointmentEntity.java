@@ -50,6 +50,11 @@ public class PolledAppointmentEntity {
     @Column(name = "appointment_type", length = 512)
     private String appointmentType;
 
+    /** OpenMRS reason / FHIR instructie-extension. */
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "appointment_reason", length = 1024)
+    private String appointmentReason;
+
     @Column(name = "voided", nullable = false)
     private boolean voided;
 
@@ -122,6 +127,14 @@ public class PolledAppointmentEntity {
 
     public void setAppointmentType(String appointmentType) {
         this.appointmentType = appointmentType;
+    }
+
+    public String getAppointmentReason() {
+        return appointmentReason;
+    }
+
+    public void setAppointmentReason(String appointmentReason) {
+        this.appointmentReason = appointmentReason;
     }
 
     public boolean isVoided() {

@@ -46,6 +46,7 @@ public class JpaAppointmentPollPersistence implements AppointmentPollPersistence
         entity.setAppointmentDatetime(a.appointmentDatetime());
         entity.setLocationId(a.locationLabel());
         entity.setAppointmentType(a.appointmentType());
+        entity.setAppointmentReason(a.reason());
         entity.setVoided(a.voided());
         entity.setLastPolledAt(lastPolledAt);
         if (patient != null) {

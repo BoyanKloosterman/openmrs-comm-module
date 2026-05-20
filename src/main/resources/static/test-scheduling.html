@@ -51,7 +51,7 @@
       color: var(--muted);
     }
     label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
-    input[type="text"], input[type="tel"] {
+    input[type="text"], input[type="tel"], select, textarea {
       width: 100%;
       padding: 0.5rem 0.6rem;
       border: 1px solid var(--border);
@@ -153,7 +153,7 @@
 <body>
   <header>
     <h1>Scheduling &amp; messaging — testconsole</h1>
-    <p>Alleen voor ontwikkeling. Maakt een FHIR-afspraak op <strong>nu + lead-uren + 5 min</strong>, pollt, en toont venster/queue/bericht.</p>
+    <p>Alleen voor ontwikkeling. Boekt in <strong>OpenMRS</strong> (bestaande patiënt) op <strong>nu + lead-uren + 5 min</strong>, sync → FHIR → poll, en toont venster/queue/bericht met OpenMRS-reden.</p>
   </header>
   <main>
     <div class="grid grid-2" style="margin-bottom: 1rem;">
@@ -172,11 +172,12 @@
         </div>
       </section>
       <section class="card">
-        <h2>Testafspraak aanmaken</h2>
-        <label for="patient-name">Patiëntnaam</label>
-        <input type="text" id="patient-name" placeholder="Test Patiënt GUI" value="Test Patiënt GUI">
-        <label for="phone">Telefoon (E.164)</label>
-        <input type="tel" id="phone" placeholder="+31612345678" value="+31612345678">
+        <h2>Testafspraak aanmaken (OpenMRS)</h2>
+        <label for="patient-select">Patiënt uit OpenMRS</label>
+        <select id="patient-select"><option value="">— laden… —</option></select>
+        <label for="reason">Reden / instructies (OpenMRS <code>reason</code>)</label>
+        <textarea id="reason" rows="2" placeholder="Bijv. Nuchter blijven, medicijnen meenemen">Testafspraak via comm-module GUI</textarea>
+        <label><input type="checkbox" id="run-sync" checked> Direct daarna OpenMRS→FHIR sync</label>
         <label><input type="checkbox" id="run-poll" checked> Direct daarna FHIR-pollen</label>
         <div class="btn-row">
           <button type="button" class="btn-primary" id="btn-create">Afspraak in herinneringsvenster</button>
@@ -208,7 +209,8 @@
         <div class="message-meta" id="message-meta">Selecteer een afspraak in de tabel.</div>
         <div class="message-box" id="message-body">—</div>
         <div class="btn-row">
-          <button type="button" class="btn-danger" id="btn-clear-logs" disabled>Logs wissen (geselecteerd)</button>
+          <button type="button" class="btn-danger" id="btn-cancel" disabled>Annuleer in OpenMRS</button>
+          <button type="button" class="btn-danger" id="btn-clear-logs" disabled>Logs wissen</button>
         </div>
       </section>
     </div>
@@ -237,6 +239,7 @@
   <script>
     const API = '/api/test/scheduling';
     let selectedId = null;
+    let selectedCancellable = false;
     let refreshTimer = null;
 
     const STATUS_LABELS = {
@@ -267,7 +270,14 @@
       const res = await fetch(API + path, opts);
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(res.status + ': ' + text);
+        try {
+          const j = JSON.parse(text);
+          const detail = j.detail || j.message || text;
+          throw new Error(res.status + ': ' + detail);
+        } catch (parseErr) {
+          if (parseErr instanceof Error && parseErr.message.startsWith(String(res.status))) throw parseErr;
+          throw new Error(res.status + ': ' + text);
+        }
       }
       if (res.status === 204) return null;
       const ct = res.headers.get('content-type') || '';
@@ -332,26 +342,56 @@
       });
     }
 
-    function renderMessage(preview) {
+    function renderMessage(row, preview) {
       const meta = document.getElementById('message-meta');
       const box = document.getElementById('message-body');
+      let html = '';
+      if (row?.appointmentReason) {
+        html = `OpenMRS reden: <strong>${escapeHtml(row.appointmentReason)}</strong><br>`;
+      }
       if (!preview) {
-        meta.textContent = 'Geen bericht (ontbrekend telefoon of niet in polled_appointment).';
+        meta.innerHTML = html + 'Geen bericht (ontbrekend telefoon).';
         box.textContent = '—';
         return;
       }
-      meta.innerHTML =
-        `<strong>${preview.subject}</strong><br>` +
-        `Naar: ${preview.recipient} · Provider: ${preview.provider} · Type: ${preview.messageType}`;
+      meta.innerHTML = html +
+        `<strong>${escapeHtml(preview.subject)}</strong><br>` +
+        `Naar: ${escapeHtml(preview.recipient)} · Provider: ${preview.provider} · Type: ${preview.messageType}`;
       box.textContent = preview.body;
+    }
+
+    function escapeHtml(s) {
+      if (!s) return '';
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     function selectAppointment(id, rows) {
       selectedId = id;
-      document.getElementById('btn-clear-logs').disabled = !id;
       const row = rows.find(r => r.appointmentFhirId === id);
+      selectedCancellable = row && !row.voided;
+      document.getElementById('btn-clear-logs').disabled = !id;
+      document.getElementById('btn-cancel').disabled = !selectedCancellable;
       renderAppointments(rows);
-      renderMessage(row?.messagePreview);
+      renderMessage(row, row?.messagePreview);
+    }
+
+    async function loadPatients() {
+      const sel = document.getElementById('patient-select');
+      try {
+        const patients = await api('/patients');
+        if (!patients.length) {
+          sel.innerHTML = '<option value="">Geen patiënten in OpenMRS</option>';
+          return;
+        }
+        sel.innerHTML = '<option value="">— kies patiënt —</option>' +
+          patients.map(p => {
+            const tel = p.hasPhone ? p.phoneMasked : 'geen tel.';
+            return `<option value="${p.patientUuid}">${escapeHtml(p.displayName)} (${tel})</option>`;
+          }).join('');
+      } catch (e) {
+        sel.innerHTML = '<option value="">Laden mislukt</option>';
+        showToast('Patiënten: ' + e.message, true);
+      }
     }
 
     function renderLogs(logs) {
@@ -383,7 +423,9 @@
         renderAppointments(appointments);
         if (selectedId) {
           const row = appointments.find(a => a.appointmentFhirId === selectedId);
-          renderMessage(row?.messagePreview);
+          selectedCancellable = row && !row.voided;
+          document.getElementById('btn-cancel').disabled = !selectedCancellable;
+          renderMessage(row, row?.messagePreview);
         }
         renderLogs(logs);
       } catch (e) {
@@ -407,9 +449,15 @@
       } catch (e) { showToast(e.message, true); }
     });
     document.getElementById('btn-create').addEventListener('click', async () => {
+      const patientUuid = document.getElementById('patient-select').value;
+      if (!patientUuid) {
+        showToast('Kies eerst een patiënt uit OpenMRS', true);
+        return;
+      }
       const body = {
-        patientName: document.getElementById('patient-name').value,
-        phone: document.getElementById('phone').value,
+        patientUuid,
+        reason: document.getElementById('reason').value,
+        runSyncAfter: document.getElementById('run-sync').checked,
         runPollAfter: document.getElementById('run-poll').checked
       };
       try {
@@ -419,11 +467,20 @@
           body: JSON.stringify(body)
         });
         document.getElementById('create-result').textContent =
-          `Aangemaakt: ${r.appointmentFhirId} om ${fmtInstant(r.appointmentStart)}. ${r.pollNote || ''}`;
+          `OpenMRS #${r.openmrsAppointmentId} → ${r.appointmentFhirId} om ${fmtInstant(r.appointmentStart)}. ` +
+          `${r.syncNote || ''} ${r.pollNote || ''}`.trim();
         selectedId = r.appointmentFhirId;
-        showToast('Testafspraak aangemaakt', false);
+        showToast('Afspraak geboekt in OpenMRS', false);
         await loadAll();
-        if (r.polledRow?.messagePreview) renderMessage(r.polledRow.messagePreview);
+        if (r.polledRow) renderMessage(r.polledRow, r.polledRow.messagePreview);
+      } catch (e) { showToast(e.message, true); }
+    });
+    document.getElementById('btn-cancel').addEventListener('click', async () => {
+      if (!selectedId || !confirm('Afspraak ' + selectedId + ' annuleren in OpenMRS?')) return;
+      try {
+        const r = await api('/appointments/' + encodeURIComponent(selectedId) + '/cancel', { method: 'POST' });
+        showToast(r.message, !r.success);
+        await loadAll();
       } catch (e) { showToast(e.message, true); }
     });
     document.getElementById('btn-clear-logs').addEventListener('click', async () => {
@@ -446,6 +503,7 @@
       if (refreshTimer) clearInterval(refreshTimer);
     }
 
+    loadPatients();
     loadAll();
     startAuto();
   </script>

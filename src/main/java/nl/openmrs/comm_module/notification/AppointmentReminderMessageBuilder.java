@@ -86,7 +86,10 @@ public class AppointmentReminderMessageBuilder {
     }
 
     private String formatInstructions(PolledAppointmentEntity appointment) {
-        String reason = resolveReasonFromFhir(appointment.getAppointmentFhirId());
+        String reason = appointment.getAppointmentReason();
+        if (reason == null || reason.isBlank()) {
+            reason = resolveReasonFromFhir(appointment.getAppointmentFhirId());
+        }
         if (reason != null && !reason.isBlank()) {
             return reason.trim();
         }

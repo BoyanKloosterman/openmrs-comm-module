@@ -2,6 +2,7 @@ package nl.openmrs.comm_module.testgui;
 
 import nl.openmrs.comm_module.config.NotificationSchedulerProperties;
 import nl.openmrs.comm_module.config.OpenmrsFhirProperties;
+import nl.openmrs.comm_module.config.OpenmrsSchedulingSyncProperties;
 import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
 import nl.openmrs.comm_module.messaging.fhir.OpenmrsFhirAppointmentMetadata;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
@@ -14,8 +15,9 @@ import nl.openmrs.comm_module.notification.persistence.NotificationDeliveryLogRe
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
 import nl.openmrs.comm_module.scheduling.OpenmrsFhirPollingService;
+import nl.openmrs.comm_module.scheduling.OpenmrsSchedulingFhirSyncService;
 import nl.openmrs.comm_module.testgui.dto.*;
-import org.hl7.fhir.r5.model.*;
+import org.hl7.fhir.r5.model.Appointment;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,26 +25,29 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
-/** Test-hulp: vensterstatus, FHIR-afspraak aanmaken, poll/scheduler en berichtpreview. */
+/** Test-hulp: OpenMRS-patiënten, boeken/annuleren, poll/sync en berichtpreview. */
 @Service
 public class SchedulingTestService {
 
     private static final int DELIVERY_LOG_LIMIT = 30;
     private static final int APPOINTMENT_LIST_LIMIT = 50;
-    /** Iets na het midden van het herinneringsvenster (zie docker-scheduling-test.md). */
+    private static final int PATIENT_LIST_LIMIT = 200;
     private static final Duration DEFAULT_OFFSET_AFTER_LEAD = Duration.ofMinutes(5);
 
     private final Clock clock;
     private final OpenmrsFhirProperties fhirProperties;
     private final NotificationSchedulerProperties schedulerProperties;
+    private final OpenmrsSchedulingSyncProperties schedulingSyncProperties;
     private final OpenmrsFhirOperations fhirOperations;
     private final OpenmrsFhirPollingService pollingService;
+    private final OpenmrsSchedulingFhirSyncService schedulingSyncService;
+    private final OpenmrsSchedulingTestRepository openmrsTestRepository;
     private final DueNotificationProcessor dueNotificationProcessor;
     private final AppointmentReminderQueryService reminderQueryService;
     private final AppointmentReminderMessageBuilder messageBuilder;
@@ -54,8 +59,11 @@ public class SchedulingTestService {
             Clock clock,
             OpenmrsFhirProperties fhirProperties,
             NotificationSchedulerProperties schedulerProperties,
+            OpenmrsSchedulingSyncProperties schedulingSyncProperties,
             OpenmrsFhirOperations fhirOperations,
             OpenmrsFhirPollingService pollingService,
+            OpenmrsSchedulingFhirSyncService schedulingSyncService,
+            OpenmrsSchedulingTestRepository openmrsTestRepository,
             DueNotificationProcessor dueNotificationProcessor,
             AppointmentReminderQueryService reminderQueryService,
             AppointmentReminderMessageBuilder messageBuilder,
@@ -65,8 +73,11 @@ public class SchedulingTestService {
         this.clock = clock;
         this.fhirProperties = fhirProperties;
         this.schedulerProperties = schedulerProperties;
+        this.schedulingSyncProperties = schedulingSyncProperties;
         this.fhirOperations = fhirOperations;
         this.pollingService = pollingService;
+        this.schedulingSyncService = schedulingSyncService;
+        this.openmrsTestRepository = openmrsTestRepository;
         this.dueNotificationProcessor = dueNotificationProcessor;
         this.reminderQueryService = reminderQueryService;
         this.messageBuilder = messageBuilder;
@@ -93,6 +104,18 @@ public class SchedulingTestService {
                 due.size());
     }
 
+    public List<OpenmrsPatientOptionDto> listOpenmrsPatients() {
+        return openmrsTestRepository.listPatients(PATIENT_LIST_LIMIT).stream()
+                .map(
+                        p ->
+                                new OpenmrsPatientOptionDto(
+                                        p.patientUuid(),
+                                        p.displayName(),
+                                        maskPhone(p.phone()),
+                                        p.phone() != null && !p.phone().isBlank()))
+                .toList();
+    }
+
     public List<PolledAppointmentViewDto> listPolledAppointments() {
         Instant now = clock.instant();
         ReminderWindowDto window = computeWindow(now);
@@ -108,18 +131,32 @@ public class SchedulingTestService {
                 .toList();
     }
 
-    public CreateTestAppointmentResultDto createTestAppointment(String phone, String patientName, boolean runPollAfter) {
+    public CreateTestAppointmentResultDto createTestAppointment(
+            String patientUuid, String reason, boolean runSyncAfter, boolean runPollAfter) {
+        if (patientUuid == null || patientUuid.isBlank()) {
+            throw new IllegalArgumentException("Kies een patiënt uit OpenMRS");
+        }
+
         Instant now = clock.instant();
-        Instant start = computeDefaultAppointmentStart(now);
-        String suffix = Long.toHexString(System.currentTimeMillis());
-        String patientId = "patient-gui-" + suffix;
-        String appointmentId = "apt-gui-" + suffix;
+        ZoneId zone = ZoneId.of(schedulingSyncProperties.getZoneId());
+        LocalDateTime start = LocalDateTime.ofInstant(computeDefaultAppointmentStart(now), zone);
+        String resolvedReason =
+                (reason != null && !reason.isBlank())
+                        ? reason.trim()
+                        : "Testafspraak via comm-module GUI";
 
-        String resolvedPhone = (phone != null && !phone.isBlank()) ? phone.trim() : "+31612345678";
-        String resolvedName = (patientName != null && !patientName.isBlank()) ? patientName.trim() : "Test Patiënt GUI";
+        OpenmrsSchedulingTestRepository.BookedOpenmrsAppointment booked =
+                openmrsTestRepository.bookAppointment(patientUuid.trim(), start, resolvedReason);
 
-        fhirOperations.upsertPatient(buildPatient(patientId, resolvedName, resolvedPhone));
-        fhirOperations.upsertAppointment(buildAppointment(appointmentId, patientId, start));
+        String syncNote = null;
+        if (runSyncAfter) {
+            try {
+                int synced = schedulingSyncService.runSync();
+                syncNote = "OpenMRS→FHIR sync: " + synced + " geëxporteerd";
+            } catch (RuntimeException e) {
+                syncNote = "Sync mislukt: " + e.getMessage();
+            }
+        }
 
         String pollNote = null;
         if (runPollAfter) {
@@ -132,17 +169,59 @@ public class SchedulingTestService {
         }
 
         ReminderWindowDto window = computeWindow(now);
-        Optional<PolledAppointmentEntity> polled = polledAppointmentRepository.findByOrganisationIdAndAppointmentFhirId(
-                fhirProperties.getOrganisationId(), appointmentId);
+        Optional<PolledAppointmentEntity> polled =
+                polledAppointmentRepository.findByOrganisationIdAndAppointmentFhirId(
+                        fhirProperties.getOrganisationId(), booked.fhirAppointmentId());
 
         return new CreateTestAppointmentResultDto(
-                appointmentId,
-                patientId,
-                start,
-                resolvedPhone,
-                resolvedName,
+                booked.fhirAppointmentId(),
+                booked.openmrsAppointmentId(),
+                booked.fhirPatientId(),
+                start.atZone(zone).toInstant(),
+                booked.reason(),
+                booked.patientDisplayName(),
+                syncNote,
                 pollNote,
                 polled.map(p -> toView(p, now, window)).orElse(null));
+    }
+
+    public CancelAppointmentResultDto cancelAppointment(String appointmentFhirId, boolean runSyncAfter, boolean runPollAfter) {
+        if (appointmentFhirId == null || appointmentFhirId.isBlank()) {
+            throw new IllegalArgumentException("appointmentFhirId ontbreekt");
+        }
+
+        Optional<Integer> openmrsId = openmrsTestRepository.resolveOpenmrsAppointmentId(appointmentFhirId);
+        boolean cancelled;
+        String message;
+
+        if (openmrsId.isPresent()) {
+            cancelled = openmrsTestRepository.cancelAppointment(openmrsId.get());
+            message =
+                    cancelled
+                            ? "OpenMRS afspraak geannuleerd (status=CANCELLED)"
+                            : "OpenMRS afspraak was al geannuleerd of niet gevonden";
+        } else {
+            cancelled = cancelFhirOnly(appointmentFhirId);
+            message = cancelled ? "FHIR-afspraak op cancelled gezet" : "FHIR-afspraak niet gevonden";
+        }
+
+        if (runSyncAfter && openmrsId.isPresent()) {
+            try {
+                schedulingSyncService.runSync();
+            } catch (RuntimeException e) {
+                message += "; sync: " + e.getMessage();
+            }
+        }
+        if (runPollAfter) {
+            try {
+                pollingService.pollOpenmrsFhir();
+            } catch (RuntimeException e) {
+                message += "; poll: " + e.getMessage();
+            }
+        }
+
+        return new CancelAppointmentResultDto(
+                cancelled, appointmentFhirId, openmrsId.orElse(null), message);
     }
 
     public TriggerResultDto triggerPoll() {
@@ -195,6 +274,17 @@ public class SchedulingTestService {
         return toDelete.size();
     }
 
+    private boolean cancelFhirOnly(String appointmentFhirId) {
+        Optional<Appointment> existing = fhirOperations.readAppointmentByLogicalId(appointmentFhirId);
+        if (existing.isEmpty()) {
+            return false;
+        }
+        Appointment appointment = existing.get();
+        appointment.setStatus(Appointment.AppointmentStatus.CANCELLED);
+        fhirOperations.upsertAppointment(appointment);
+        return true;
+    }
+
     private Instant computeDefaultAppointmentStart(Instant now) {
         int leadHours = Math.max(0, schedulerProperties.getReminderLeadHours());
         return now.plus(Duration.ofHours(leadHours)).plus(DEFAULT_OFFSET_AFTER_LEAD);
@@ -219,15 +309,19 @@ public class SchedulingTestService {
                 a.getAppointmentFhirId(), AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H);
         Optional<MessagePreviewDto> preview =
                 messageBuilder.build24HourReminder(a).map(this::toPreview);
+        Optional<Integer> openmrsId = openmrsTestRepository.resolveOpenmrsAppointmentId(a.getAppointmentFhirId());
 
         return new PolledAppointmentViewDto(
                 a.getAppointmentFhirId(),
+                openmrsId.orElse(null),
+                openmrsId.isPresent(),
                 a.getPatientFhirId(),
                 a.getAppointmentDatetime(),
                 a.getPatientDisplayName(),
                 maskPhone(a.getPatientPhone()),
                 a.getLocationId(),
                 a.getAppointmentType(),
+                a.getAppointmentReason(),
                 a.isVoided(),
                 a.getLastPolledAt(),
                 status,
@@ -255,44 +349,6 @@ public class SchedulingTestService {
             return AppointmentWindowStatus.TOO_LATE;
         }
         return AppointmentWindowStatus.IN_REMINDER_WINDOW;
-    }
-
-    private static Patient buildPatient(String id, String displayName, String phone) {
-        Patient patient = new Patient();
-        patient.setId(id);
-        HumanName name = new HumanName();
-        String[] parts = displayName.split("\\s+", 2);
-        if (parts.length > 0 && !parts[0].isBlank()) {
-            name.addGiven(parts[0].trim());
-        }
-        if (parts.length > 1 && !parts[1].isBlank()) {
-            name.setFamily(parts[1].trim());
-        } else if (parts.length == 1) {
-            name.setFamily(parts[0].trim());
-        }
-        patient.addName(name);
-        patient.addTelecom(
-                new ContactPoint().setSystem(ContactPoint.ContactPointSystem.PHONE).setValue(phone));
-        return patient;
-    }
-
-    private static Appointment buildAppointment(String id, String patientId, Instant start) {
-        Appointment appointment = new Appointment();
-        appointment.setId(id);
-        appointment.setStatus(Appointment.AppointmentStatus.BOOKED);
-        appointment.setStart(Date.from(start));
-        appointment.setEnd(Date.from(start.plus(Duration.ofMinutes(30))));
-        appointment.setSubject(new Reference("Patient/" + patientId));
-        appointment.addServiceType(
-                new CodeableReference(new CodeableConcept().setText("GUI-test consult")));
-        OpenmrsFhirAppointmentMetadata.applyTo(
-                appointment, "Test Polikliniek B12", "Kom 10 minuten van tevoren (GUI-test)");
-        Appointment.AppointmentParticipantComponent participant =
-                new Appointment.AppointmentParticipantComponent();
-        participant.setActor(new Reference("Patient/" + patientId));
-        participant.setStatus(Appointment.ParticipationStatus.ACCEPTED);
-        appointment.addParticipant(participant);
-        return appointment;
     }
 
     private MessagePreviewDto toPreview(NotificationQueueMessage message) {

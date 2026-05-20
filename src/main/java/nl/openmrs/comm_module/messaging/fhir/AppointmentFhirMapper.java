@@ -43,6 +43,7 @@ public class AppointmentFhirMapper {
         }
         String locationLabel = resolveLocationLabel(appointment);
         String typeLabel = resolveTypeLabel(appointment);
+        String reason = OpenmrsFhirAppointmentMetadata.readReason(appointment);
         boolean voided = isVoidedStatus(appointment.getStatus());
         return Optional.of(new AppointmentPollDto(
                 appointmentId,
@@ -51,6 +52,7 @@ public class AppointmentFhirMapper {
                 start,
                 locationLabel,
                 typeLabel,
+                reason,
                 voided));
     }
 

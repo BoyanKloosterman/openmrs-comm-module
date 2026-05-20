@@ -47,7 +47,7 @@ class JpaAppointmentPollPersistenceTest {
 
     @Test
     void slaatAppointmentEnPatientOp() {
-        AppointmentPollDto apt = new AppointmentPollDto("uuid-1", "apt-1", "pat-1", t, "loc-1", "consult", false);
+        AppointmentPollDto apt = new AppointmentPollDto("uuid-1", "apt-1", "pat-1", t, "loc-1", "consult", "Nuchter blijven", false);
         PatientPollDto patient = new PatientPollDto("pat-1", "Jan Jansen", "+31612345678");
         List<AppointmentWithPatientDto> batch = List.of(new AppointmentWithPatientDto(apt, patient));
 
@@ -58,6 +58,7 @@ class JpaAppointmentPollPersistenceTest {
         PolledAppointmentEntity a = all.get(0);
         assertEquals("org-a", a.getOrganisationId());
         assertEquals("consult", a.getAppointmentType());
+        assertEquals("Nuchter blijven", a.getAppointmentReason());
         assertEquals("loc-1", a.getLocationId());
         assertEquals("+31612345678", a.getPatientPhone());
     }
@@ -66,11 +67,11 @@ class JpaAppointmentPollPersistenceTest {
     void upsertWerktBijTweedePoll() {
         Instant t1 = Instant.parse("2026-05-10T09:00:00Z");
         Instant t2 = Instant.parse("2026-05-11T09:00:00Z");
-        AppointmentPollDto first = new AppointmentPollDto("uuid-1", "apt-9", "pat-9", t1, null, "oud", false);
+        AppointmentPollDto first = new AppointmentPollDto("uuid-1", "apt-9", "pat-9", t1, null, "oud", null, false);
         persistence.upsertPollResults("org-b", List.of(new AppointmentWithPatientDto(first, null)));
 
         PatientPollDto patient = new PatientPollDto("pat-9", "P", "+31111");
-        AppointmentPollDto second = new AppointmentPollDto("uuid-1", "apt-9", "pat-9", t2, "loc-x", "nieuw", true);
+        AppointmentPollDto second = new AppointmentPollDto("uuid-1", "apt-9", "pat-9", t2, "loc-x", "nieuw", "Reden gewijzigd", true);
         persistence.upsertPollResults("org-b", List.of(new AppointmentWithPatientDto(second, patient)));
 
         Optional<PolledAppointmentEntity> stored =

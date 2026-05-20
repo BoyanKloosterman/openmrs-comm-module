@@ -24,6 +24,11 @@ public class SchedulingTestController {
         return testService.status();
     }
 
+    @GetMapping("/patients")
+    public List<OpenmrsPatientOptionDto> patients() {
+        return testService.listOpenmrsPatients();
+    }
+
     @GetMapping("/appointments")
     public List<PolledAppointmentViewDto> appointments() {
         return testService.listPolledAppointments();
@@ -32,10 +37,19 @@ public class SchedulingTestController {
     @PostMapping("/appointments")
     public CreateTestAppointmentResultDto createAppointment(
             @RequestBody(required = false) CreateTestAppointmentRequest body) {
-        String phone = body != null ? body.phone() : null;
-        String name = body != null ? body.patientName() : null;
+        String patientUuid = body != null ? body.patientUuid() : null;
+        String reason = body != null ? body.reason() : null;
+        boolean runSync = body == null || body.runSyncAfter() == null || body.runSyncAfter();
         boolean runPoll = body == null || body.runPollAfter() == null || body.runPollAfter();
-        return testService.createTestAppointment(phone, name, runPoll);
+        return testService.createTestAppointment(patientUuid, reason, runSync, runPoll);
+    }
+
+    @PostMapping("/appointments/{appointmentFhirId}/cancel")
+    public CancelAppointmentResultDto cancelAppointment(
+            @PathVariable String appointmentFhirId,
+            @RequestParam(defaultValue = "true") boolean runSyncAfter,
+            @RequestParam(defaultValue = "true") boolean runPollAfter) {
+        return testService.cancelAppointment(appointmentFhirId, runSyncAfter, runPollAfter);
     }
 
     @PostMapping("/poll")
