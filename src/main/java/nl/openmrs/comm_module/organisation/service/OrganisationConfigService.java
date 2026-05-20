@@ -80,4 +80,24 @@ public class OrganisationConfigService {
                 entity.getUpdatedAt()
         );
     }
+
+    @Transactional(readOnly = true)
+    public List<OrganisationProviderConfigResponse> getEnabledProviders(String organisationId) {
+        OrganisationConfigEntity entity = organisationConfigRepository
+                .findByOrganisationId(organisationId)
+                .orElseThrow(() -> new IllegalArgumentException("Organisation config not found: " + organisationId));
+
+        return entity.getProviders()
+                .stream()
+                .filter(OrganisationProviderConfigEntity::isEnabled)
+                .sorted(Comparator.comparingInt(OrganisationProviderConfigEntity::getPriority))
+                .map(provider -> new OrganisationProviderConfigResponse(
+                        provider.getId(),
+                        provider.getProviderType(),
+                        provider.isEnabled(),
+                        provider.getPriority(),
+                        provider.getEncryptedCredentials() != null && !provider.getEncryptedCredentials().isBlank()
+                ))
+                .toList();
+    }
 }
