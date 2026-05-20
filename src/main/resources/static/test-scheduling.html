@@ -148,6 +148,23 @@
     .toast.err { border-color: var(--err); }
     .empty { color: var(--muted); font-size: 0.85rem; }
     .auto label { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
+    .provider-config-table input[type="number"] { width: 4rem; margin-bottom: 0; }
+    .provider-config-table textarea {
+      min-height: 2.5rem;
+      font-family: ui-monospace, monospace;
+      font-size: 0.75rem;
+    }
+    .failover-chain { font-size: 0.85rem; color: var(--ok); margin-top: 0.5rem; }
+    .enabled-providers-list {
+      font-family: ui-monospace, monospace;
+      font-size: 0.75rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      margin-top: 0.5rem;
+      white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
@@ -170,7 +187,7 @@
         <p class="empty" id="window-desc-alt" hidden></p>
         <label for="provider-select">Messaging provider (queue)</label>
         <select id="provider-select"><option value="">— laden… —</option></select>
-        <p class="empty" style="margin-top: 0.35rem;">Provider wordt per afspraak opgeslagen (bij boeken of bij wijziging hier). <em>Scheduler nu</em> = alle in venster; <em>Verstuur geselecteerde</em> = één rij. Achtergrond-scheduler = altijd default.</p>
+        <p class="empty" style="margin-top: 0.35rem;">Queue-test: provider per afspraak (dropdown). Failover bij verzenden: zie <strong>Organisatie providers</strong> hieronder (prioriteit 1 → backup 2, 3, 4).</p>
         <div class="btn-row">
           <button type="button" class="btn-secondary" id="btn-refresh">Vernieuwen</button>
           <button type="button" class="btn-secondary" id="btn-poll">Poll nu</button>
@@ -199,6 +216,36 @@
         <p class="empty" id="create-result"></p>
       </section>
     </div>
+
+    <section class="card" style="margin-bottom: 1rem;">
+      <h2>Organisatie providers (failover / backup)</h2>
+      <p class="empty">API: <code>POST /api/organisations/config</code> · <code>GET …/config/{id}</code> · <code>GET …/config/{id}/providers</code></p>
+      <label for="org-id-input">Organisatie-id</label>
+      <input type="text" id="org-id-input" value="openmrs-demo" placeholder="openmrs-demo">
+      <label><input type="checkbox" id="org-config-active" checked> Organisatie actief</label>
+      <p class="empty">Prioriteit 1 = eerste poging; bij falen probeert het systeem de volgende <em>ingeschakelde</em> provider. Credentials worden niet teruggegeven bij laden — alleen opnieuw invullen bij opslaan.</p>
+      <div style="overflow-x: auto; margin-top: 0.75rem;">
+        <table class="provider-config-table">
+          <thead>
+            <tr>
+              <th>Provider</th>
+              <th>Aan</th>
+              <th>Prioriteit</th>
+              <th>Credentials (JSON)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="provider-config-body"></tbody>
+        </table>
+      </div>
+      <p class="failover-chain" id="org-failover-preview">Failover-keten: —</p>
+      <pre class="enabled-providers-list" id="org-enabled-list">Actieve providers (API): nog niet geladen</pre>
+      <div class="btn-row">
+        <button type="button" class="btn-secondary" id="btn-load-org-config">Config laden</button>
+        <button type="button" class="btn-secondary" id="btn-load-enabled-providers">Actieve providers ophalen</button>
+        <button type="button" class="btn-primary" id="btn-save-org-config">Config opslaan</button>
+      </div>
+    </section>
 
     <div class="grid grid-3">
       <section class="card">
@@ -256,6 +303,14 @@
 
   <script>
     const API = '/api/test/scheduling';
+    const CONFIG_API = '/api/organisations/config';
+    const ALL_PROVIDERS = ['SWIFTSEND', 'SECUREPOST', 'LEGACYLINK', 'ASYNCFLOW'];
+    const CREDENTIAL_PLACEHOLDERS = {
+      SWIFTSEND: '{"apiKey":"test-swiftsend-key"}',
+      SECUREPOST: '{"clientId":"securepost-client","clientSecret":"securepost-secret"}',
+      LEGACYLINK: '{"username":"legacy","password":"legacy-secret"}',
+      ASYNCFLOW: '{"token":"asyncflow-test-token"}'
+    };
     let selectedId = null;
     let selectedCancellable = false;
     let refreshTimer = null;
@@ -323,6 +378,167 @@
       if (!iso) return '—';
       const d = new Date(iso);
       return d.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' Z');
+    }
+
+    function getOrgId() {
+      const v = document.getElementById('org-id-input').value.trim();
+      return v || 'openmrs-demo';
+    }
+
+    function renderProviderConfigRows(existingProviders) {
+      const byType = {};
+      (existingProviders || []).forEach(p => { byType[p.providerType] = p; });
+      const body = document.getElementById('provider-config-body');
+      body.innerHTML = ALL_PROVIDERS.map((type, idx) => {
+        const ex = byType[type];
+        const enabled = ex ? ex.enabled : (idx === 0);
+        const priority = ex ? ex.priority : (idx + 1);
+        const credOk = ex && ex.credentialsConfigured;
+        const status = credOk ? '<span class="badge badge-sent">keys ok</span>' : '<span class="empty">—</span>';
+        return `<tr data-provider="${type}">
+          <td><strong>${type}</strong></td>
+          <td><input type="checkbox" class="prov-enabled" ${enabled ? 'checked' : ''}></td>
+          <td><input type="number" class="prov-priority" min="1" max="99" value="${priority}"></td>
+          <td><textarea class="prov-credentials" rows="2" placeholder="${escapeHtml(CREDENTIAL_PLACEHOLDERS[type] || '{}')}"></textarea></td>
+          <td class="prov-status">${status}</td>
+        </tr>`;
+      }).join('');
+      updateFailoverPreviewFromForm();
+    }
+
+    function collectProviderConfigFromForm() {
+      return Array.from(document.querySelectorAll('#provider-config-body tr')).map(tr => {
+        const providerType = tr.dataset.provider;
+        const enabled = tr.querySelector('.prov-enabled').checked;
+        const priority = parseInt(tr.querySelector('.prov-priority').value, 10) || 99;
+        const credentials = tr.querySelector('.prov-credentials').value.trim();
+        return { providerType, enabled, priority, credentials };
+      });
+    }
+
+    function updateFailoverPreviewFromForm() {
+      const enabled = collectProviderConfigFromForm()
+        .filter(p => p.enabled)
+        .sort((a, b) => a.priority - b.priority);
+      const el = document.getElementById('org-failover-preview');
+      if (!enabled.length) {
+        el.textContent = 'Failover-keten: geen providers ingeschakeld';
+        return;
+      }
+      el.textContent = 'Failover-keten: ' + enabled.map((p, i) =>
+        (i + 1) + '. ' + p.providerType + ' (prio ' + p.priority + ')'
+      ).join(' → ');
+    }
+
+    function renderEnabledProvidersList(list) {
+      const el = document.getElementById('org-enabled-list');
+      if (!list || !list.length) {
+        el.textContent = 'Actieve providers (API): geen (of config ontbreekt)';
+        return;
+      }
+      const lines = list
+        .slice()
+        .sort((a, b) => a.priority - b.priority)
+        .map(p => `prio ${p.priority}  ${p.providerType}  enabled=${p.enabled}  credentials=${p.credentialsConfigured}`);
+      el.textContent = 'Actieve providers (GET …/providers):\n' + lines.join('\n');
+      updateFailoverPreviewFromApiList(list);
+    }
+
+    function updateFailoverPreviewFromApiList(list) {
+      const enabled = (list || []).filter(p => p.enabled).sort((a, b) => a.priority - b.priority);
+      if (enabled.length) {
+        document.getElementById('org-failover-preview').textContent =
+          'Failover-keten (server): ' + enabled.map(p => p.providerType + ' (' + p.priority + ')').join(' → ');
+      }
+    }
+
+    async function apiConfig(path, opts) {
+      const res = await fetch(CONFIG_API + path, opts);
+      if (!res.ok) {
+        const text = await res.text();
+        try {
+          const j = JSON.parse(text);
+          throw new Error(res.status + ': ' + (j.detail || j.message || text));
+        } catch (e) {
+          if (e instanceof Error && String(e.message).startsWith(String(res.status))) throw e;
+          throw new Error(res.status + ': ' + text);
+        }
+      }
+      if (res.status === 204) return null;
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) return res.json();
+      return res.text();
+    }
+
+    async function loadOrgConfig() {
+      const orgId = getOrgId();
+      try {
+        const cfg = await apiConfig('/' + encodeURIComponent(orgId));
+        document.getElementById('org-config-active').checked = cfg.active !== false;
+        renderProviderConfigRows(cfg.providers || []);
+        showToast('Config geladen voor ' + orgId, false);
+      } catch (e) {
+        if (String(e.message).startsWith('404')) {
+          renderProviderConfigRows([]);
+          showToast('Geen config voor ' + orgId + ' — standaardrijen getoond', true);
+        } else {
+          showToast('Config laden: ' + e.message, true);
+        }
+      }
+    }
+
+    async function loadEnabledProviders() {
+      const orgId = getOrgId();
+      try {
+        const list = await apiConfig('/' + encodeURIComponent(orgId) + '/providers');
+        renderEnabledProvidersList(list);
+        showToast(list.length + ' actieve provider(s)', false);
+      } catch (e) {
+        showToast('Providers ophalen: ' + e.message, true);
+      }
+    }
+
+    async function saveOrgConfig() {
+      const orgId = getOrgId();
+      const rows = collectProviderConfigFromForm();
+      const enabledRows = rows.filter(r => r.enabled);
+      if (!enabledRows.length) {
+        showToast('Schakel minstens één provider in', true);
+        return;
+      }
+      const priorities = enabledRows.map(r => r.priority);
+      if (new Set(priorities).size !== priorities.length) {
+        showToast('Elke ingeschakelde provider moet een unieke prioriteit hebben', true);
+        return;
+      }
+      for (const r of enabledRows) {
+        if (!r.credentials) {
+          showToast('Credentials JSON verplicht voor ingeschakelde provider: ' + r.providerType, true);
+          return;
+        }
+      }
+      const body = {
+        organisationId: orgId,
+        active: document.getElementById('org-config-active').checked,
+        providers: rows.map(r => ({
+          providerType: r.providerType,
+          enabled: r.enabled,
+          priority: r.priority,
+          credentials: r.credentials || null
+        }))
+      };
+      try {
+        const saved = await apiConfig('', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        renderProviderConfigRows(saved.providers || []);
+        await loadEnabledProviders();
+        showToast('Config opgeslagen voor ' + orgId, false);
+      } catch (e) {
+        showToast('Opslaan: ' + e.message, true);
+      }
     }
 
     async function api(path, opts) {
@@ -544,6 +760,10 @@
           api('/delivery-logs')
         ]);
         renderStatus(status);
+        const orgInput = document.getElementById('org-id-input');
+        if (!orgInput.value.trim() && status.organisationId) {
+          orgInput.value = status.organisationId;
+        }
         populateProviderSelect(status);
         lastAppointments = appointments;
         renderAppointments(appointments);
@@ -705,9 +925,20 @@
       if (refreshTimer) clearInterval(refreshTimer);
     }
 
+    document.getElementById('provider-config-body').addEventListener('change', (e) => {
+      if (e.target.classList.contains('prov-enabled') || e.target.classList.contains('prov-priority')) {
+        updateFailoverPreviewFromForm();
+      }
+    });
+    document.getElementById('btn-load-org-config').addEventListener('click', loadOrgConfig);
+    document.getElementById('btn-load-enabled-providers').addEventListener('click', loadEnabledProviders);
+    document.getElementById('btn-save-org-config').addEventListener('click', saveOrgConfig);
+
+    renderProviderConfigRows([]);
     loadPatients();
     loadLocations();
     loadAll();
+    loadOrgConfig();
     startAuto();
   </script>
 </body>
