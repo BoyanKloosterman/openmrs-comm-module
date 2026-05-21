@@ -16,9 +16,8 @@ import nl.openmrs.comm_module.provider.MessagingProviderType;
 import nl.openmrs.comm_module.notification.NotificationDeliveryLogService;
 import nl.openmrs.comm_module.notification.persistence.NotificationDeliveryLogEntity;
 import nl.openmrs.comm_module.notification.persistence.NotificationDeliveryLogRepository;
+import nl.openmrs.comm_module.poll.AppointmentPollExclusionService;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
-import nl.openmrs.comm_module.poll.persistence.PolledAppointmentExclusionEntity;
-import nl.openmrs.comm_module.poll.persistence.PolledAppointmentExclusionRepository;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
 import nl.openmrs.comm_module.scheduling.OpenmrsFhirPollingService;
 import nl.openmrs.comm_module.scheduling.OpenmrsSchedulingFhirSyncService;
@@ -63,7 +62,7 @@ public class SchedulingTestService {
     private final AppointmentReminderMessageBuilder messageBuilder;
     private final NotificationDeliveryLogService deliveryLogService;
     private final PolledAppointmentRepository polledAppointmentRepository;
-    private final PolledAppointmentExclusionRepository pollExclusionRepository;
+    private final AppointmentPollExclusionService pollExclusionService;
     private final NotificationDeliveryLogRepository deliveryLogRepository;
 
     public SchedulingTestService(
@@ -81,7 +80,7 @@ public class SchedulingTestService {
             AppointmentReminderMessageBuilder messageBuilder,
             NotificationDeliveryLogService deliveryLogService,
             PolledAppointmentRepository polledAppointmentRepository,
-            PolledAppointmentExclusionRepository pollExclusionRepository,
+            AppointmentPollExclusionService pollExclusionService,
             NotificationDeliveryLogRepository deliveryLogRepository) {
         this.clock = clock;
         this.fhirProperties = fhirProperties;
@@ -97,7 +96,7 @@ public class SchedulingTestService {
         this.messageBuilder = messageBuilder;
         this.deliveryLogService = deliveryLogService;
         this.polledAppointmentRepository = polledAppointmentRepository;
-        this.pollExclusionRepository = pollExclusionRepository;
+        this.pollExclusionService = pollExclusionService;
         this.deliveryLogRepository = deliveryLogRepository;
     }
 
@@ -470,15 +469,7 @@ public class SchedulingTestService {
     }
 
     private void recordPollExclusion(String organisationId, String appointmentFhirId) {
-        if (pollExclusionRepository.existsByOrganisationIdAndAppointmentFhirId(
-                organisationId, appointmentFhirId)) {
-            return;
-        }
-        PolledAppointmentExclusionEntity exclusion = new PolledAppointmentExclusionEntity();
-        exclusion.setOrganisationId(organisationId);
-        exclusion.setAppointmentFhirId(appointmentFhirId);
-        exclusion.setExcludedAt(clock.instant());
-        pollExclusionRepository.save(exclusion);
+        pollExclusionService.excludeIfAbsent(organisationId, appointmentFhirId);
     }
 
     @Transactional

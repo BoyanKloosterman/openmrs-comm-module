@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,14 +29,17 @@ public class FhirR5AppointmentPollSource implements AppointmentPollSource {
     private final OpenmrsFhirOperationsFactory fhirOperationsFactory;
     private final AppointmentFhirMapper appointmentFhirMapper;
     private final PatientFhirMapper patientFhirMapper;
+    private final Clock clock;
 
     public FhirR5AppointmentPollSource(
             OpenmrsFhirOperationsFactory fhirOperationsFactory,
             AppointmentFhirMapper appointmentFhirMapper,
-            PatientFhirMapper patientFhirMapper) {
+            PatientFhirMapper patientFhirMapper,
+            Clock clock) {
         this.fhirOperationsFactory = fhirOperationsFactory;
         this.appointmentFhirMapper = appointmentFhirMapper;
         this.patientFhirMapper = patientFhirMapper;
+        this.clock = clock;
     }
 
     @Override
@@ -59,9 +63,14 @@ public class FhirR5AppointmentPollSource implements AppointmentPollSource {
 
     private List<AppointmentWithPatientDto> attachPatients(
             String organisationId, List<AppointmentPollDto> appointments, OpenmrsFhirOperations fhirOperations) {
+        Instant now = clock.instant();
         Map<String, Optional<PatientPollDto>> cache = new HashMap<>();
         List<AppointmentWithPatientDto> out = new ArrayList<>(appointments.size());
         for (AppointmentPollDto apt : appointments) {
+            if (!isUpcoming(apt, now)) {
+                out.add(new AppointmentWithPatientDto(apt, null));
+                continue;
+            }
             String pid = apt.patientId();
             Optional<PatientPollDto> patientOpt =
                     cache.computeIfAbsent(pid, id -> loadPatientPollDto(fhirOperations, id));
@@ -80,5 +89,10 @@ public class FhirR5AppointmentPollSource implements AppointmentPollSource {
 
     private Optional<PatientPollDto> loadPatientPollDto(OpenmrsFhirOperations fhirOperations, String patientLogicalId) {
         return fhirOperations.readPatientByLogicalId(patientLogicalId).flatMap(patientFhirMapper::mapPatient);
+    }
+
+    private static boolean isUpcoming(AppointmentPollDto appointment, Instant now) {
+        Instant start = appointment.appointmentDatetime();
+        return start != null && start.isAfter(now);
     }
 }
