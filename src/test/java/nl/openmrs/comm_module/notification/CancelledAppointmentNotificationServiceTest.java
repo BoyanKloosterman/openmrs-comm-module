@@ -24,7 +24,7 @@ class CancelledAppointmentNotificationServiceTest {
 
     @Test
     void negeertActieveAfspraak() {
-        service.handleVoidedAppointment(appointment(false), false);
+        service.handleAfterPoll(appointment(false), false);
         verify(deliveryLogService, never()).cancelQueuedNotifications(org.mockito.ArgumentMatchers.any());
     }
 
@@ -34,7 +34,7 @@ class CancelledAppointmentNotificationServiceTest {
         when(deliveryLogService.cancelQueuedNotifications("apt-1")).thenReturn(2);
         when(deliveryLogService.hasAnySuccessfulDelivery("apt-1")).thenReturn(false);
 
-        service.handleVoidedAppointment(apt, false);
+        service.handleAfterPoll(apt, false);
 
         verify(deliveryLogService).cancelQueuedNotifications("apt-1");
     }
@@ -45,7 +45,7 @@ class CancelledAppointmentNotificationServiceTest {
         when(deliveryLogService.cancelQueuedNotifications("apt-1")).thenReturn(0);
         when(deliveryLogService.hasAnySuccessfulDelivery("apt-1")).thenReturn(true);
 
-        service.handleVoidedAppointment(apt, false);
+        service.handleAfterPoll(apt, false);
 
         verify(deliveryLogService).hasAnySuccessfulDelivery("apt-1");
     }
@@ -55,7 +55,7 @@ class CancelledAppointmentNotificationServiceTest {
         PolledAppointmentEntity apt = appointment(true);
         when(deliveryLogService.cancelQueuedNotifications("apt-1")).thenReturn(0);
 
-        service.handleVoidedAppointment(apt, true);
+        service.handleAfterPoll(apt, true);
 
         verify(deliveryLogService, never()).hasAnySuccessfulDelivery(org.mockito.ArgumentMatchers.any());
     }

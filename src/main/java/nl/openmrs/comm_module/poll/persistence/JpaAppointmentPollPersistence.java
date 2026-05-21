@@ -3,7 +3,7 @@ package nl.openmrs.comm_module.poll.persistence;
 import nl.openmrs.comm_module.messaging.fhir.dto.AppointmentPollDto;
 import nl.openmrs.comm_module.messaging.fhir.dto.AppointmentWithPatientDto;
 import nl.openmrs.comm_module.messaging.fhir.dto.PatientPollDto;
-import nl.openmrs.comm_module.notification.CancelledAppointmentNotificationService;
+import nl.openmrs.comm_module.notification.voided.VoidedAppointmentCoordinator;
 import nl.openmrs.comm_module.poll.AppointmentPollPersistence;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,15 +16,15 @@ public class JpaAppointmentPollPersistence implements AppointmentPollPersistence
 
     private final PolledAppointmentRepository repository;
     private final PolledAppointmentExclusionRepository exclusionRepository;
-    private final CancelledAppointmentNotificationService cancelledAppointmentNotificationService;
+    private final VoidedAppointmentCoordinator voidedAppointmentCoordinator;
 
     public JpaAppointmentPollPersistence(
             PolledAppointmentRepository repository,
             PolledAppointmentExclusionRepository exclusionRepository,
-            CancelledAppointmentNotificationService cancelledAppointmentNotificationService) {
+            VoidedAppointmentCoordinator voidedAppointmentCoordinator) {
         this.repository = repository;
         this.exclusionRepository = exclusionRepository;
-        this.cancelledAppointmentNotificationService = cancelledAppointmentNotificationService;
+        this.voidedAppointmentCoordinator = voidedAppointmentCoordinator;
     }
 
     @Override
@@ -43,9 +43,7 @@ public class JpaAppointmentPollPersistence implements AppointmentPollPersistence
             boolean wasVoidedBefore = entity.getId() != null && entity.isVoided();
             applyAppointment(entity, organisationId, a, row.patient(), now);
             repository.save(entity);
-            if (entity.isVoided()) {
-                cancelledAppointmentNotificationService.handleVoidedAppointment(entity, wasVoidedBefore);
-            }
+            voidedAppointmentCoordinator.notifyIfVoided(entity, wasVoidedBefore);
         }
     }
 

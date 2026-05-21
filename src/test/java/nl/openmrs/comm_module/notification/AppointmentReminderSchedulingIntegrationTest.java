@@ -5,6 +5,7 @@ import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
 import nl.openmrs.comm_module.messaging.queue.RabbitMqProducer;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.notification.persistence.NotificationDeliveryLogRepository;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderConfiguration;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
 import nl.openmrs.comm_module.messaging.queue.RabbitMqConsumer;
@@ -96,7 +97,7 @@ class AppointmentReminderSchedulingIntegrationTest {
         verify(rabbitMqProducer).publish(captor.capture());
         NotificationQueueMessage msg = captor.getValue();
         assertEquals("apt-flow", msg.getAppointmentFhirId());
-        assertEquals(AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H, msg.getMessageType());
+        assertEquals(AppointmentReminderConfiguration.MESSAGE_TYPE_24H, msg.getMessageType());
         assertEquals(1, deliveryLogRepository.count());
         assertEquals(NotificationDeliveryLogService.STATUS_QUEUED, deliveryLogRepository.findAll().get(0).getStatus());
     }

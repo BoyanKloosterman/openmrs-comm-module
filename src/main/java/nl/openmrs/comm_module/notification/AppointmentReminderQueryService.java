@@ -2,6 +2,7 @@ package nl.openmrs.comm_module.notification;
 
 import nl.openmrs.comm_module.config.NotificationSchedulerProperties;
 import nl.openmrs.comm_module.config.OpenmrsFhirProperties;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderSpec;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
 import org.springframework.stereotype.Service;
@@ -11,7 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
-/** US-001-2 / US-002-1: appointments in herinneringsvenster (~24u of ~1u). */
+/** US-001/002: appointments in herinneringsvenster voor een gegeven spec. */
 @Service
 public class AppointmentReminderQueryService {
 
@@ -34,12 +35,8 @@ public class AppointmentReminderQueryService {
         this.clock = clock;
     }
 
-    public List<PolledAppointmentEntity> findAppointmentsDueFor24HourReminder() {
-        return findAppointmentsDueForReminder(Math.max(0, schedulerProperties.getReminderLeadHours()));
-    }
-
-    public List<PolledAppointmentEntity> findAppointmentsDueFor1HourReminder() {
-        return findAppointmentsDueForReminder(Math.max(0, schedulerProperties.getReminder1LeadHours()));
+    public List<PolledAppointmentEntity> findAppointmentsDueFor(AppointmentReminderSpec spec) {
+        return findAppointmentsDueForReminder(spec.leadHours(schedulerProperties));
     }
 
     public List<PolledAppointmentEntity> findAppointmentsDueForReminder(int leadHours) {
