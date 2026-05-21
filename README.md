@@ -22,7 +22,8 @@ Doelgroep van deze documentatie: **technisch beheerders** van een OpenMRS-organi
 5. [Poorten en onderdelen in Compose](#poorten-en-onderdelen-in-compose)
 6. [Optioneel: alleen infra in Docker, app op de host](#optioneel-alleen-infra-in-docker-app-op-de-host)
 7. [Build en tests](#build-en-tests)
-8. [Verdere documentatie](#verdere-documentatie)
+8. [Continuous Integration](#continuous-integration)
+9. [Verdere documentatie](#verdere-documentatie)
 
 ---
 
@@ -317,6 +318,23 @@ Unit/integration tests:
 ```
 
 Rapportage (Sprint 3): [TESTRAPPORTAGE.md](TESTRAPPORTAGE.md) (106 tests, kernlogica) en [PERFORMANCERAPPORTAGE.md](PERFORMANCERAPPORTAGE.md) (throughput/latency in Docker).
+
+---
+
+## Continuous Integration
+
+Automatische tests draaien automatisch bij elke push naar een feature branch of pull request via **GitHub Actions**.
+
+**Pipeline:** `.github/workflows/ci.yml`
+- ✅ Triggert op pushes naar `feature/**`, `main` en `develop`
+- ✅ Voert alle unit tests uit met Maven
+- ✅ Test-resultaten zijn zichtbaar in GitHub (Actions tab)
+- ❌ Pipeline faalt als tests niet slagen
+
+Tests lokaal valideren vóór push:
+```bash
+./mvnw clean test
+```
 
 ---
 
