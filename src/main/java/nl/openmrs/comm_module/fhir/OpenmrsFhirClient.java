@@ -12,30 +12,22 @@ import org.hl7.fhir.r5.model.Appointment;
 import org.hl7.fhir.r5.model.Bundle;
 import org.hl7.fhir.r5.model.CapabilityStatement;
 import org.hl7.fhir.r5.model.Patient;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
-@Component
+/** Ruwe HAPI FHIR R5-client voor één organisatie-bron. */
 public class OpenmrsFhirClient implements OpenmrsFhirOperations {
 
     private final IGenericClient client;
 
-    public OpenmrsFhirClient(
-            @Qualifier("fhirContextR5") FhirContext fhirContext,
-            @Value("${openmrs.fhir.server-url}") String fhirServerUrl,
-            @Value("${openmrs.fhir.username}") String fhirUsername,
-            @Value("${openmrs.fhir.password}") String fhirPassword) {
-        this.client = fhirContext.newRestfulGenericClient(fhirServerUrl);
-        // Alleen bij credentials (OpenMRS); standalone HAPI R5 in Docker heeft geen auth
-        if (fhirUsername != null && !fhirUsername.isBlank()) {
-            this.client.registerInterceptor(new BasicAuthInterceptor(fhirUsername, fhirPassword));
+    public OpenmrsFhirClient(FhirContext fhirContext, OrganisationFhirConnection connection) {
+        this.client = fhirContext.newRestfulGenericClient(connection.serverUrl());
+        if (connection.hasAuth()) {
+            this.client.registerInterceptor(
+                    new BasicAuthInterceptor(connection.username(), connection.password()));
         }
     }
 

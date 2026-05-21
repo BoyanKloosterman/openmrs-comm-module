@@ -1,6 +1,7 @@
 package nl.openmrs.comm_module.poll.source;
 
 import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
+import nl.openmrs.comm_module.fhir.OpenmrsFhirOperationsFactory;
 import nl.openmrs.comm_module.messaging.fhir.AppointmentFhirMapper;
 import nl.openmrs.comm_module.messaging.fhir.PatientFhirMapper;
 import nl.openmrs.comm_module.messaging.fhir.dto.AppointmentPollDto;
@@ -18,30 +19,31 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/** US-003: FHIR R5 Appointment + Patient ophalen en mappen. */
+/** US-003: FHIR R5 Appointment + Patient ophalen en mappen per organisatie. */
 @Component
 public class FhirR5AppointmentPollSource implements AppointmentPollSource {
 
     private static final Logger log = LoggerFactory.getLogger(FhirR5AppointmentPollSource.class);
 
-    private final OpenmrsFhirOperations fhirOperations;
+    private final OpenmrsFhirOperationsFactory fhirOperationsFactory;
     private final AppointmentFhirMapper appointmentFhirMapper;
     private final PatientFhirMapper patientFhirMapper;
 
     public FhirR5AppointmentPollSource(
-            OpenmrsFhirOperations fhirOperations,
+            OpenmrsFhirOperationsFactory fhirOperationsFactory,
             AppointmentFhirMapper appointmentFhirMapper,
             PatientFhirMapper patientFhirMapper) {
-        this.fhirOperations = fhirOperations;
+        this.fhirOperationsFactory = fhirOperationsFactory;
         this.appointmentFhirMapper = appointmentFhirMapper;
         this.patientFhirMapper = patientFhirMapper;
     }
 
     @Override
-    public List<AppointmentWithPatientDto> fetchBetween(Instant from, Instant to) {
+    public List<AppointmentWithPatientDto> fetchBetween(String organisationId, Instant from, Instant to) {
+        OpenmrsFhirOperations fhirOperations = fhirOperationsFactory.forOrganisation(organisationId);
         List<Appointment> raw = fhirOperations.searchAppointmentsBetween(from, to);
         List<AppointmentPollDto> snapshots = mapAppointments(raw);
-        return attachPatients(snapshots);
+        return attachPatients(organisationId, snapshots, fhirOperations);
     }
 
     private List<AppointmentPollDto> mapAppointments(List<Appointment> raw) {
@@ -55,24 +57,28 @@ public class FhirR5AppointmentPollSource implements AppointmentPollSource {
         return out;
     }
 
-    private List<AppointmentWithPatientDto> attachPatients(List<AppointmentPollDto> appointments) {
+    private List<AppointmentWithPatientDto> attachPatients(
+            String organisationId, List<AppointmentPollDto> appointments, OpenmrsFhirOperations fhirOperations) {
         Map<String, Optional<PatientPollDto>> cache = new HashMap<>();
         List<AppointmentWithPatientDto> out = new ArrayList<>(appointments.size());
         for (AppointmentPollDto apt : appointments) {
             String pid = apt.patientId();
-            Optional<PatientPollDto> patientOpt = cache.computeIfAbsent(pid, this::loadPatientPollDto);
+            Optional<PatientPollDto> patientOpt =
+                    cache.computeIfAbsent(pid, id -> loadPatientPollDto(fhirOperations, id));
             PatientPollDto patient = patientOpt.orElse(null);
             if (patient == null) {
-                log.warn("Patient niet geladen voor appointment {} (patientId={})", apt.appointmentId(), pid);
+                log.warn(
+                        "Patient niet geladen voor appointment {} (org={}, patientId={})",
+                        apt.appointmentId(),
+                        organisationId,
+                        pid);
             }
             out.add(new AppointmentWithPatientDto(apt, patient));
         }
         return out;
     }
 
-    private Optional<PatientPollDto> loadPatientPollDto(String patientLogicalId) {
-        return fhirOperations
-                .readPatientByLogicalId(patientLogicalId)
-                .flatMap(patientFhirMapper::mapPatient);
+    private Optional<PatientPollDto> loadPatientPollDto(OpenmrsFhirOperations fhirOperations, String patientLogicalId) {
+        return fhirOperations.readPatientByLogicalId(patientLogicalId).flatMap(patientFhirMapper::mapPatient);
     }
 }
