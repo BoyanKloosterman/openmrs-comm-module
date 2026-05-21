@@ -1,6 +1,7 @@
 package nl.openmrs.comm_module.notification;
 
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderConfiguration;
 import nl.openmrs.comm_module.notification.persistence.NotificationDeliveryLogRepository;
 import nl.openmrs.comm_module.provider.MessagingProviderType;
 import nl.openmrs.comm_module.provider.ProviderSendResult;
@@ -65,7 +66,7 @@ class NotificationDeliveryLogServiceTest {
         deliveryLogService.recordProviderAttempt(message, ProviderSendResult.success("prov-99"));
 
         assertEquals(2, repository.count());
-        assertTrue(deliveryLogService.hasSuccessfulDelivery("apt-1", AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H));
+        assertTrue(deliveryLogService.hasSuccessfulDelivery("apt-1", AppointmentReminderConfiguration.MESSAGE_TYPE_24H));
     }
 
     @Test
@@ -87,7 +88,7 @@ class NotificationDeliveryLogServiceTest {
         deliveryLogService.recordProviderAttempt(message, ProviderSendResult.failed("timeout"));
 
         assertEquals(1, repository.count());
-        assertFalse(deliveryLogService.hasSuccessfulDelivery("apt-1", AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H));
+        assertFalse(deliveryLogService.hasSuccessfulDelivery("apt-1", AppointmentReminderConfiguration.MESSAGE_TYPE_24H));
         assertEquals("FAILED", repository.findAll().get(0).getStatus());
     }
 
@@ -98,7 +99,7 @@ class NotificationDeliveryLogServiceTest {
                 "Onderwerp",
                 "Body",
                 MessagingProviderType.SWIFTSEND,
-                AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H,
+                AppointmentReminderConfiguration.MESSAGE_TYPE_24H,
                 NOW);
         message.setAppointmentFhirId("apt-1");
         return message;

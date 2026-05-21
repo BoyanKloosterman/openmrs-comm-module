@@ -16,14 +16,6 @@ public class AppointmentReminderEligibilityService {
         this.clock = clock;
     }
 
-    public boolean maySend24HourReminder(PolledAppointmentEntity appointment) {
-        return maySendReminder(appointment);
-    }
-
-    public boolean maySend24HourReminder(PolledAppointmentEntity appointment, Instant now) {
-        return maySendReminder(appointment, now);
-    }
-
     public boolean maySendReminder(PolledAppointmentEntity appointment) {
         return maySendReminder(appointment, clock.instant());
     }

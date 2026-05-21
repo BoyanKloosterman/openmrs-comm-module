@@ -7,6 +7,8 @@ import nl.openmrs.comm_module.poll.AppointmentPollPersistence;
 import nl.openmrs.comm_module.messaging.fhir.dto.AppointmentPollDto;
 import nl.openmrs.comm_module.messaging.fhir.dto.AppointmentWithPatientDto;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderConfiguration;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderTestSpecs;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
 import nl.openmrs.comm_module.provider.MessagingProviderType;
 import nl.openmrs.comm_module.scheduling.NotificationScheduler;
@@ -83,7 +85,9 @@ class AppointmentCancellationIntegrationTest {
         AppointmentPollDto active =
                 new AppointmentPollDto("uuid-1", "apt-cancel", "pat-1", START, "loc", "consult", null, false);
         pollPersistence.upsertPollResults(ORG, List.of(new AppointmentWithPatientDto(active, null)));
-        assertEquals(1, reminderQueryService.findAppointmentsDueFor24HourReminder().size());
+        assertEquals(
+                1,
+                reminderQueryService.findAppointmentsDueFor(AppointmentReminderTestSpecs.HOURS_24).size());
 
         NotificationQueueMessage queued = queuedMessage("apt-cancel");
         deliveryLogService.recordQueued(queued);
@@ -102,7 +106,10 @@ class AppointmentCancellationIntegrationTest {
                 deliveryLogRepository
                         .findByAppointmentFhirIdAndStatus("apt-cancel", NotificationDeliveryLogService.STATUS_QUEUED)
                         .isEmpty());
-        assertTrue(reminderQueryService.findAppointmentsDueFor24HourReminder().isEmpty());
+        assertTrue(
+                reminderQueryService
+                        .findAppointmentsDueFor(AppointmentReminderTestSpecs.HOURS_24)
+                        .isEmpty());
     }
 
     @Test
@@ -131,7 +138,7 @@ class AppointmentCancellationIntegrationTest {
                         "Onderwerp",
                         "Body",
                         MessagingProviderType.SWIFTSEND,
-                        AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H,
+                        AppointmentReminderConfiguration.MESSAGE_TYPE_24H,
                         Instant.parse("2026-05-21T12:00:00Z"));
         message.setAppointmentFhirId(appointmentFhirId);
         return message;

@@ -1,13 +1,14 @@
 package nl.openmrs.comm_module.notification;
 
+import nl.openmrs.comm_module.notification.voided.VoidedAppointmentHandler;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-/** US-017: geen herinneringen meer na annulering (voided / FHIR cancelled). */
+/** US-017: geplande notificaties verwijderen + log bij late annulering. */
 @Service
-public class CancelledAppointmentNotificationService {
+public class CancelledAppointmentNotificationService implements VoidedAppointmentHandler {
 
     private static final Logger log = LoggerFactory.getLogger(CancelledAppointmentNotificationService.class);
 
@@ -17,10 +18,8 @@ public class CancelledAppointmentNotificationService {
         this.deliveryLogService = deliveryLogService;
     }
 
-    /**
-     * Na poll: geplande (QUEUED) logs weg; bij overgang actief→geannuleerd waarschuwen als al verstuurd.
-     */
-    public void handleVoidedAppointment(PolledAppointmentEntity appointment, boolean wasVoidedBefore) {
+    @Override
+    public void handleAfterPoll(PolledAppointmentEntity appointment, boolean wasVoidedBefore) {
         if (appointment == null || !appointment.isVoided()) {
             return;
         }

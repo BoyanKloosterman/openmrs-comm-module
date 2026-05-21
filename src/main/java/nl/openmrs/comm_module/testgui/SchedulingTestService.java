@@ -9,6 +9,9 @@ import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.notification.AppointmentReminderMessageBuilder;
 import nl.openmrs.comm_module.notification.AppointmentReminderPublisher;
 import nl.openmrs.comm_module.notification.AppointmentReminderQueryService;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderCatalog;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderConfiguration;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderSpec;
 import nl.openmrs.comm_module.provider.MessagingProviderType;
 import nl.openmrs.comm_module.notification.NotificationDeliveryLogService;
 import nl.openmrs.comm_module.notification.persistence.NotificationDeliveryLogEntity;
@@ -54,6 +57,7 @@ public class SchedulingTestService {
     private final OpenmrsFhirPollingService pollingService;
     private final OpenmrsSchedulingFhirSyncService schedulingSyncService;
     private final OpenmrsSchedulingTestRepository openmrsTestRepository;
+    private final AppointmentReminderCatalog reminderCatalog;
     private final AppointmentReminderPublisher appointmentReminderPublisher;
     private final AppointmentReminderQueryService reminderQueryService;
     private final AppointmentReminderMessageBuilder messageBuilder;
@@ -71,6 +75,7 @@ public class SchedulingTestService {
             OpenmrsFhirPollingService pollingService,
             OpenmrsSchedulingFhirSyncService schedulingSyncService,
             OpenmrsSchedulingTestRepository openmrsTestRepository,
+            AppointmentReminderCatalog reminderCatalog,
             AppointmentReminderPublisher appointmentReminderPublisher,
             AppointmentReminderQueryService reminderQueryService,
             AppointmentReminderMessageBuilder messageBuilder,
@@ -86,6 +91,7 @@ public class SchedulingTestService {
         this.pollingService = pollingService;
         this.schedulingSyncService = schedulingSyncService;
         this.openmrsTestRepository = openmrsTestRepository;
+        this.reminderCatalog = reminderCatalog;
         this.appointmentReminderPublisher = appointmentReminderPublisher;
         this.reminderQueryService = reminderQueryService;
         this.messageBuilder = messageBuilder;
@@ -99,8 +105,10 @@ public class SchedulingTestService {
         Instant now = clock.instant();
         ReminderWindowDto window24 = computeWindow(now, schedulerProperties.getReminderLeadHours());
         ReminderWindowDto window1 = computeWindow(now, schedulerProperties.getReminder1LeadHours());
-        List<PolledAppointmentEntity> due24 = reminderQueryService.findAppointmentsDueFor24HourReminder();
-        List<PolledAppointmentEntity> due1 = reminderQueryService.findAppointmentsDueFor1HourReminder();
+        AppointmentReminderSpec spec24 = requireSpec(ReminderKind.H24);
+        AppointmentReminderSpec spec1 = requireSpec(ReminderKind.H1);
+        List<PolledAppointmentEntity> due24 = reminderQueryService.findAppointmentsDueFor(spec24);
+        List<PolledAppointmentEntity> due1 = reminderQueryService.findAppointmentsDueFor(spec1);
         return new SchedulingTestStatusDto(
                 now,
                 fhirProperties.getOrganisationId(),
@@ -397,33 +405,22 @@ public class SchedulingTestService {
     }
 
     private int countDue(ReminderKind kind) {
-        return switch (kind) {
-            case H24 -> reminderQueryService.findAppointmentsDueFor24HourReminder().size();
-            case H1 -> reminderQueryService.findAppointmentsDueFor1HourReminder().size();
-            case ALL ->
-                    reminderQueryService.findAppointmentsDueFor24HourReminder().size()
-                            + reminderQueryService.findAppointmentsDueFor1HourReminder().size();
-        };
+        int total = 0;
+        for (AppointmentReminderSpec spec : specsFor(kind)) {
+            total += reminderQueryService.findAppointmentsDueFor(spec).size();
+        }
+        return total;
     }
 
     private int publishDueWithPerAppointmentProvider(ReminderKind kind, MessagingProviderType fallback) {
         int queued = 0;
-        if (kind == ReminderKind.H24 || kind == ReminderKind.ALL) {
+        for (AppointmentReminderSpec spec : specsFor(kind)) {
             for (PolledAppointmentEntity appointment :
-                    reminderQueryService.findAppointmentsDueFor24HourReminder()) {
+                    reminderQueryService.findAppointmentsDueFor(spec)) {
                 MessagingProviderType provider = resolveProviderForEntity(appointment, fallback);
                 queued +=
-                        appointmentReminderPublisher.publish24HourReminders(
-                                List.of(appointment), provider);
-            }
-        }
-        if (kind == ReminderKind.H1 || kind == ReminderKind.ALL) {
-            for (PolledAppointmentEntity appointment :
-                    reminderQueryService.findAppointmentsDueFor1HourReminder()) {
-                MessagingProviderType provider = resolveProviderForEntity(appointment, fallback);
-                queued +=
-                        appointmentReminderPublisher.publish1HourReminders(
-                                List.of(appointment), provider);
+                        appointmentReminderPublisher.publishReminders(
+                                List.of(appointment), spec, provider);
             }
         }
         return queued;
@@ -432,11 +429,8 @@ public class SchedulingTestService {
     private int publishForEntity(
             PolledAppointmentEntity entity, MessagingProviderType provider, ReminderKind kind) {
         int queued = 0;
-        if (kind == ReminderKind.H24 || kind == ReminderKind.ALL) {
-            queued += appointmentReminderPublisher.publish24HourReminders(List.of(entity), provider);
-        }
-        if (kind == ReminderKind.H1 || kind == ReminderKind.ALL) {
-            queued += appointmentReminderPublisher.publish1HourReminders(List.of(entity), provider);
+        for (AppointmentReminderSpec spec : specsFor(kind)) {
+            queued += appointmentReminderPublisher.publishReminders(List.of(entity), spec, provider);
         }
         return queued;
     }
@@ -582,12 +576,9 @@ public class SchedulingTestService {
 
     private Optional<MessagePreviewDto> buildPreview(
             PolledAppointmentEntity appointment, MessagingProviderType provider, ReminderKind kind) {
-        var builder =
-                switch (kind) {
-                    case H1 -> messageBuilder.build1HourReminder(appointment);
-                    case H24, ALL -> messageBuilder.build24HourReminder(appointment);
-                };
-        return builder.map(
+        return messageBuilder
+                .buildReminder(appointment, requireSpec(kind))
+                .map(
                 msg -> {
                     msg.setProvider(provider);
                     return toPreview(msg);
@@ -632,9 +623,9 @@ public class SchedulingTestService {
         AppointmentWindowStatus status24 = resolveStatus(a, now, window24);
         AppointmentWindowStatus status1 = resolveStatus(a, now, window1);
         boolean alreadySent24 = deliveryLogService.hasSuccessfulDelivery(
-                a.getAppointmentFhirId(), AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H);
+                a.getAppointmentFhirId(), AppointmentReminderConfiguration.MESSAGE_TYPE_24H);
         boolean alreadySent1 = deliveryLogService.hasSuccessfulDelivery(
-                a.getAppointmentFhirId(), AppointmentReminderMessageBuilder.MESSAGE_TYPE_1H);
+                a.getAppointmentFhirId(), AppointmentReminderConfiguration.MESSAGE_TYPE_1H);
         Optional<MessagePreviewDto> preview24 = buildPreview(a, previewProvider, ReminderKind.H24);
         Optional<MessagePreviewDto> preview1 = buildPreview(a, previewProvider, ReminderKind.H1);
         Optional<Integer> openmrsId = openmrsTestRepository.resolveOpenmrsAppointmentId(a.getAppointmentFhirId());
@@ -708,6 +699,27 @@ public class SchedulingTestService {
                 e.getProviderMessageId(),
                 e.getErrorMessage(),
                 e.getAttemptedAt());
+    }
+
+    private AppointmentReminderSpec requireSpec(ReminderKind kind) {
+        if (kind == ReminderKind.ALL) {
+            throw new IllegalArgumentException("Geen enkele spec voor ReminderKind.ALL");
+        }
+        String id =
+                kind == ReminderKind.H24
+                        ? AppointmentReminderConfiguration.ID_24H
+                        : AppointmentReminderConfiguration.ID_1H;
+        return reminderCatalog
+                .findById(id)
+                .orElseThrow(() -> new IllegalStateException("Herinneringsspec ontbreekt: " + id));
+    }
+
+    private List<AppointmentReminderSpec> specsFor(ReminderKind kind) {
+        return switch (kind) {
+            case H24 -> List.of(requireSpec(ReminderKind.H24));
+            case H1 -> List.of(requireSpec(ReminderKind.H1));
+            case ALL -> reminderCatalog.all();
+        };
     }
 
     private static String maskPhone(String phone) {

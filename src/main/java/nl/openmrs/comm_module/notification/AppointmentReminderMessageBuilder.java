@@ -4,6 +4,7 @@ import nl.openmrs.comm_module.config.NotificationSchedulerProperties;
 import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
 import nl.openmrs.comm_module.messaging.fhir.OpenmrsFhirAppointmentMetadata;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderSpec;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import org.hl7.fhir.r5.model.Appointment;
 import org.springframework.stereotype.Component;
@@ -20,9 +21,6 @@ import java.util.UUID;
 @Component
 public class AppointmentReminderMessageBuilder {
 
-    public static final String MESSAGE_TYPE_24H = "APPOINTMENT_REMINDER_24H";
-    public static final String MESSAGE_TYPE_1H = "APPOINTMENT_REMINDER_1H";
-
     private static final DateTimeFormatter DATE_FORMAT =
             DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("nl-NL"));
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
@@ -36,12 +34,9 @@ public class AppointmentReminderMessageBuilder {
         this.fhirOperations = fhirOperations;
     }
 
-    public Optional<NotificationQueueMessage> build24HourReminder(PolledAppointmentEntity appointment) {
-        return buildReminder(appointment, "24 uur", MESSAGE_TYPE_24H);
-    }
-
-    public Optional<NotificationQueueMessage> build1HourReminder(PolledAppointmentEntity appointment) {
-        return buildReminder(appointment, "1 uur", MESSAGE_TYPE_1H);
+    public Optional<NotificationQueueMessage> buildReminder(
+            PolledAppointmentEntity appointment, AppointmentReminderSpec spec) {
+        return buildReminder(appointment, spec.leadLabel(), spec.messageType());
     }
 
     private Optional<NotificationQueueMessage> buildReminder(
@@ -129,7 +124,6 @@ public class AppointmentReminderMessageBuilder {
                     .map(OpenmrsFhirAppointmentMetadata::readReason)
                     .orElse(null);
         } catch (RuntimeException e) {
-            // Verwijderd in FHIR (410) maar nog in polled_appointment — geen crash in test-GUI
             return null;
         }
     }

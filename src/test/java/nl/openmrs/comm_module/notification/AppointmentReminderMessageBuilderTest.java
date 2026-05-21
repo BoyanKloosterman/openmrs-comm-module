@@ -3,6 +3,7 @@ package nl.openmrs.comm_module.notification;
 import nl.openmrs.comm_module.config.NotificationSchedulerProperties;
 import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
 import nl.openmrs.comm_module.messaging.fhir.OpenmrsFhirAppointmentMetadata;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderTestSpecs;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import nl.openmrs.comm_module.provider.MessagingProviderType;
 import org.hl7.fhir.r5.model.Appointment;
@@ -43,10 +44,11 @@ class AppointmentReminderMessageBuilderTest {
         PolledAppointmentEntity appointment = appointment(
                 "+31612345678", "Jan de Vries", Instant.parse("2026-05-19T14:30:00Z"), "poli-2", "Controle");
 
-        var message = builder.build24HourReminder(appointment).orElseThrow();
+        var message =
+                builder.buildReminder(appointment, AppointmentReminderTestSpecs.HOURS_24).orElseThrow();
 
         assertEquals("+31612345678", message.getRecipient());
-        assertEquals(AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H, message.getMessageType());
+        assertEquals(AppointmentReminderTestSpecs.HOURS_24.messageType(), message.getMessageType());
         assertEquals("apt-1", message.getAppointmentFhirId());
         assertTrue(message.getBody().contains("Jan de Vries"));
         assertTrue(message.getBody().contains("poli-2"));
@@ -58,9 +60,10 @@ class AppointmentReminderMessageBuilderTest {
         PolledAppointmentEntity appointment = appointment(
                 "+31612345678", "Jan de Vries", Instant.parse("2026-05-19T14:30:00Z"), "poli-2", "Controle");
 
-        var message = builder.build1HourReminder(appointment).orElseThrow();
+        var message =
+                builder.buildReminder(appointment, AppointmentReminderTestSpecs.HOURS_1).orElseThrow();
 
-        assertEquals(AppointmentReminderMessageBuilder.MESSAGE_TYPE_1H, message.getMessageType());
+        assertEquals(AppointmentReminderTestSpecs.HOURS_1.messageType(), message.getMessageType());
         assertTrue(message.getSubject().contains("1 uur"));
         assertTrue(message.getBody().contains("over 1 uur"));
         assertTrue(message.getBody().contains("poli-2"));
@@ -69,7 +72,7 @@ class AppointmentReminderMessageBuilderTest {
     @Test
     void leegBijOntbrekendTelefoonnummer() {
         PolledAppointmentEntity appointment = appointment(null, "Jan", Instant.now(), "loc", null);
-        assertTrue(builder.build24HourReminder(appointment).isEmpty());
+        assertTrue(builder.buildReminder(appointment, AppointmentReminderTestSpecs.HOURS_24).isEmpty());
     }
 
     @Test
@@ -78,7 +81,10 @@ class AppointmentReminderMessageBuilderTest {
                 "+31612345678", "Jan", Instant.parse("2026-05-19T14:30:00Z"), "Poli 2", "Consult");
         appointment.setAppointmentReason("Nuchter blijven");
 
-        String body = builder.build24HourReminder(appointment).orElseThrow().getBody();
+        String body =
+                builder.buildReminder(appointment, AppointmentReminderTestSpecs.HOURS_24)
+                        .orElseThrow()
+                        .getBody();
 
         assertTrue(body.contains("Nuchter blijven"));
         assertTrue(!body.contains("Standaard ziekenhuisregel"));
@@ -99,7 +105,11 @@ class AppointmentReminderMessageBuilderTest {
         PolledAppointmentEntity appointment = appointment(
                 "+31612345678", "Jan", Instant.parse("2026-05-19T14:30:00Z"), "Poli 2", "Consult");
 
-        String body = customBuilder.build24HourReminder(appointment).orElseThrow().getBody();
+        String body =
+                customBuilder
+                        .buildReminder(appointment, AppointmentReminderTestSpecs.HOURS_24)
+                        .orElseThrow()
+                        .getBody();
 
         assertTrue(body.contains("Nuchter blijven"));
         assertTrue(body.contains("Poli 2"));

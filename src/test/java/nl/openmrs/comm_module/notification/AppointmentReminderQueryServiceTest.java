@@ -2,6 +2,7 @@ package nl.openmrs.comm_module.notification;
 
 import nl.openmrs.comm_module.messaging.queue.RabbitMqConsumer;
 import nl.openmrs.comm_module.messaging.queue.RabbitMqProducer;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderTestSpecs;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
 import nl.openmrs.comm_module.scheduling.NotificationScheduler;
@@ -69,7 +70,8 @@ class AppointmentReminderQueryServiceTest {
         save(ORG, "apt-voided", Instant.parse("2026-05-19T10:10:00Z"), true);
         save("other-org", "apt-wrong", Instant.parse("2026-05-19T10:10:00Z"), false);
 
-        List<PolledAppointmentEntity> due = queryService.findAppointmentsDueFor24HourReminder();
+        List<PolledAppointmentEntity> due =
+                queryService.findAppointmentsDueFor(AppointmentReminderTestSpecs.HOURS_24);
 
         assertEquals(1, due.size());
         assertEquals("apt-in", due.get(0).getAppointmentFhirId());
@@ -78,7 +80,8 @@ class AppointmentReminderQueryServiceTest {
     @Test
     void legeLijstAlsGeenMatches() {
         save(ORG, "apt-far", Instant.parse("2026-05-22T12:00:00Z"), false);
-        assertTrue(queryService.findAppointmentsDueFor24HourReminder().isEmpty());
+        assertTrue(
+                queryService.findAppointmentsDueFor(AppointmentReminderTestSpecs.HOURS_24).isEmpty());
     }
 
     @Test
@@ -87,7 +90,8 @@ class AppointmentReminderQueryServiceTest {
         save(ORG, "apt-grens-einde", Instant.parse("2026-05-19T10:29:59Z"), false);
         save(ORG, "apt-buiten", Instant.parse("2026-05-19T10:30:00Z"), false);
 
-        List<PolledAppointmentEntity> due = queryService.findAppointmentsDueFor24HourReminder();
+        List<PolledAppointmentEntity> due =
+                queryService.findAppointmentsDueFor(AppointmentReminderTestSpecs.HOURS_24);
 
         assertEquals(2, due.size());
     }
@@ -97,7 +101,8 @@ class AppointmentReminderQueryServiceTest {
         save(ORG, "apt-started", Instant.parse("2026-05-18T09:30:00Z"), false);
         save(ORG, "apt-in", Instant.parse("2026-05-19T10:05:00Z"), false);
 
-        List<PolledAppointmentEntity> due = queryService.findAppointmentsDueFor24HourReminder();
+        List<PolledAppointmentEntity> due =
+                queryService.findAppointmentsDueFor(AppointmentReminderTestSpecs.HOURS_24);
 
         assertEquals(1, due.size());
         assertEquals("apt-in", due.get(0).getAppointmentFhirId());
@@ -108,7 +113,8 @@ class AppointmentReminderQueryServiceTest {
         save(ORG, "apt-1h-in", Instant.parse("2026-05-18T11:05:00Z"), false);
         save(ORG, "apt-1h-far", Instant.parse("2026-05-19T10:00:00Z"), false);
 
-        List<PolledAppointmentEntity> due = queryService.findAppointmentsDueFor1HourReminder();
+        List<PolledAppointmentEntity> due =
+                queryService.findAppointmentsDueFor(AppointmentReminderTestSpecs.HOURS_1);
 
         assertEquals(1, due.size());
         assertEquals("apt-1h-in", due.get(0).getAppointmentFhirId());
