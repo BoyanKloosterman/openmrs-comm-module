@@ -39,6 +39,15 @@ public class SchedulingTestController {
         return testService.listPolledAppointments();
     }
 
+    @GetMapping("/appointments/{appointmentFhirId}")
+    public ResponseEntity<PolledAppointmentDetailDto> appointmentDetail(
+            @PathVariable String appointmentFhirId) {
+        return testService
+                .getPolledAppointmentDetail(appointmentFhirId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @GetMapping("/openmrs-appointments")
     public List<OpenmrsAppointmentViewDto> openmrsAppointments(
             @RequestParam(defaultValue = "false") boolean includeVoided) {

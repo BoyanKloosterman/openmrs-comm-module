@@ -8,6 +8,7 @@ import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
 import nl.openmrs.comm_module.messaging.fhir.OpenmrsFhirAppointmentMetadata;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.notification.AppointmentReminderMessageBuilder;
+import nl.openmrs.comm_module.notification.content.AppointmentNotificationContent;
 import nl.openmrs.comm_module.notification.AppointmentReminderPublisher;
 import nl.openmrs.comm_module.notification.AppointmentReminderQueryService;
 import nl.openmrs.comm_module.notification.reminder.AppointmentReminderCatalog;
@@ -37,6 +38,8 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -45,6 +48,10 @@ import java.util.Optional;
 /** Test-hulp: OpenMRS-patiënten, boeken/annuleren, poll/sync en berichtpreview. */
 @Service
 public class SchedulingTestService {
+
+    private static final DateTimeFormatter DETAIL_DATE_FORMAT =
+            DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("nl-NL"));
+    private static final DateTimeFormatter DETAIL_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
     private static final int DELIVERY_LOG_LIMIT = 30;
     private static final int APPOINTMENT_LIST_LIMIT = 50;
@@ -206,6 +213,16 @@ public class SchedulingTestService {
         }
         String message = runSyncPollAfterMutate(runSyncAfter, runPollAfter, "Afspraak verwijderd (voided) in OpenMRS");
         return new MutateOpenmrsAppointmentResultDto(true, openmrsAppointmentId, fhirId, message);
+    }
+
+    public Optional<PolledAppointmentDetailDto> getPolledAppointmentDetail(String appointmentFhirId) {
+        if (appointmentFhirId == null || appointmentFhirId.isBlank()) {
+            return Optional.empty();
+        }
+        return polledAppointmentRepository
+                .findByOrganisationIdAndAppointmentFhirId(
+                        fhirProperties.getOrganisationId(), appointmentFhirId.trim())
+                .map(this::toDetail);
     }
 
     public List<PolledAppointmentViewDto> listPolledAppointments() {
@@ -650,6 +667,34 @@ public class SchedulingTestService {
                 .findFirstByAppointmentFhirIdOrderByAttemptedAtDesc(appointmentFhirId)
                 .map(NotificationDeliveryLogEntity::getProvider)
                 .orElse(null);
+    }
+
+    private PolledAppointmentDetailDto toDetail(PolledAppointmentEntity a) {
+        AppointmentNotificationContent content = messageBuilder.resolveContent(a);
+        MessagingProviderType previewProvider =
+                resolveProviderForEntity(a, schedulerProperties.getDefaultProvider());
+        Optional<MessagePreviewDto> preview24 = buildPreview(a, previewProvider, ReminderKind.H24);
+        Optional<MessagePreviewDto> preview1 = buildPreview(a, previewProvider, ReminderKind.H1);
+        Optional<Integer> openmrsId = openmrsTestRepository.resolveOpenmrsAppointmentId(a.getAppointmentFhirId());
+
+        return new PolledAppointmentDetailDto(
+                a.getAppointmentFhirId(),
+                openmrsId.orElse(null),
+                a.getPatientDisplayName(),
+                maskPhone(a.getPatientPhone()),
+                a.getAppointmentDatetime(),
+                DETAIL_DATE_FORMAT.format(content.appointmentTime()),
+                DETAIL_TIME_FORMAT.format(content.appointmentTime()),
+                content.locationOrDefault(),
+                blankToNull(a.getAppointmentType()),
+                content.hasInstructions() ? content.instructions() : null,
+                a.isVoided(),
+                preview24.orElse(null),
+                preview1.orElse(null));
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private PolledAppointmentViewDto toView(

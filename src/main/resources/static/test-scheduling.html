@@ -211,6 +211,28 @@
     label { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
     code { font-size: 0.78rem; color: var(--accent); }
     .toolbar { margin-top: 0.75rem; }
+
+    tbody tr.appt-row { cursor: pointer; }
+    tbody tr.appt-row:hover td { background: rgba(61, 139, 253, 0.08); }
+    tbody tr.appt-row.selected td { background: rgba(61, 139, 253, 0.15); }
+
+    .detail-panel {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    .detail-panel[hidden] { display: none; }
+    .detail-body-preview {
+      margin-top: 0.75rem;
+      padding: 0.65rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.2);
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+      font-family: inherit;
+      color: var(--text);
+    }
   </style>
 </head>
 <body>
@@ -268,8 +290,9 @@
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" id="appointments-card">
       <h2>Polled appointments (database)</h2>
+      <p class="empty" style="margin: 0 0 0.75rem;">Klik een rij voor datum, locatie en instructies (notificatie-inhoud).</p>
       <div style="overflow-x: auto;">
         <table>
           <thead>
@@ -287,6 +310,15 @@
         </table>
       </div>
       <p class="empty" id="appointments-empty">Geen rijen in polled_appointment.</p>
+
+      <div class="detail-panel" id="appointment-detail" hidden>
+        <h3>Afspraakdetail</h3>
+        <dl class="kv-rows" id="detail-fields"></dl>
+        <h3>Voorbeeldbericht 24 uur</h3>
+        <pre class="detail-body-preview" id="detail-preview-24">—</pre>
+        <h3>Voorbeeldbericht 1 uur</h3>
+        <pre class="detail-body-preview" id="detail-preview-1">—</pre>
+      </div>
     </section>
 
     <section class="card">
@@ -314,6 +346,7 @@
   <script>
     const API = '/api/test/scheduling';
     let refreshTimer = null;
+    let selectedAppointmentFhirId = null;
 
     const WINDOW_LABELS = {
       IN_REMINDER_WINDOW: 'in venster',
@@ -521,20 +554,67 @@
       return '';
     }
 
+    function renderAppointmentDetail(d) {
+      const panel = document.getElementById('appointment-detail');
+      if (!d) {
+        panel.hidden = true;
+        return;
+      }
+      panel.hidden = false;
+      kvRows('detail-fields', [
+        ['FHIR id', '<code>' + esc(d.appointmentFhirId) + '</code>', 'mono'],
+        ['OpenMRS id', d.openmrsAppointmentId != null ? String(d.openmrsAppointmentId) : '—'],
+        ['Patiënt', esc(d.patientDisplayName || '—')],
+        ['Telefoon', esc(d.patientPhoneMasked || '—')],
+        ['Datum', esc(d.appointmentDateLabel || '—')],
+        ['Tijd', esc(d.appointmentTimeLabel || '—')],
+        ['Locatie', esc(d.location || '—')],
+        ['Soort afspraak', esc(d.appointmentType || '—')],
+        ['Instructies', esc(d.instructions || '— (geen specifieke instructies)')],
+        ['Voided', d.voided ? 'ja' : 'nee', d.voided ? 'warn' : '']
+      ]);
+      document.getElementById('detail-preview-24').textContent =
+        d.messagePreview24h && d.messagePreview24h.body ? d.messagePreview24h.body : '—';
+      document.getElementById('detail-preview-1').textContent =
+        d.messagePreview1h && d.messagePreview1h.body ? d.messagePreview1h.body : '—';
+    }
+
+    async function selectAppointment(fhirId) {
+      selectedAppointmentFhirId = fhirId;
+      document.querySelectorAll('#appointments-body tr.appt-row').forEach(tr => {
+        tr.classList.toggle('selected', tr.dataset.fhirId === fhirId);
+      });
+      try {
+        const detail = await api('/appointments/' + encodeURIComponent(fhirId));
+        renderAppointmentDetail(detail);
+      } catch (e) {
+        showToast('Detail laden mislukt: ' + e.message, true);
+      }
+    }
+
     function renderAppointments(rows) {
       const body = document.getElementById('appointments-body');
       const empty = document.getElementById('appointments-empty');
       if (!rows.length) {
         body.innerHTML = '';
         empty.hidden = false;
+        document.getElementById('appointment-detail').hidden = true;
+        selectedAppointmentFhirId = null;
         return;
       }
       empty.hidden = true;
+      const stillThere = selectedAppointmentFhirId
+        && rows.some(r => r.appointmentFhirId === selectedAppointmentFhirId);
+      if (!stillThere) {
+        selectedAppointmentFhirId = null;
+        document.getElementById('appointment-detail').hidden = true;
+      }
       body.innerHTML = rows.map(r => {
         const cls = rowClassForWindow(r.windowStatus);
         const w24 = WINDOW_LABELS[r.windowStatus] || r.windowStatus;
         const w1 = WINDOW_LABELS[r.oneHourWindowStatus] || r.oneHourWindowStatus;
-        return `<tr class="${cls}">
+        const selected = r.appointmentFhirId === selectedAppointmentFhirId ? ' selected' : '';
+        return `<tr class="appt-row ${cls}${selected}" data-fhir-id="${esc(r.appointmentFhirId)}">
           <td><code>${esc(r.appointmentFhirId)}</code></td>
           <td>${fmtInstant(r.appointmentDatetime)}</td>
           <td>${esc(r.patientDisplayName || r.patientFhirId || '—')}</td>
@@ -544,6 +624,12 @@
           <td>${r.voided ? 'ja' : 'nee'}</td>
         </tr>`;
       }).join('');
+      body.querySelectorAll('tr.appt-row').forEach(tr => {
+        tr.addEventListener('click', () => selectAppointment(tr.dataset.fhirId));
+      });
+      if (selectedAppointmentFhirId) {
+        selectAppointment(selectedAppointmentFhirId);
+      }
     }
 
     function renderLogs(logs) {
