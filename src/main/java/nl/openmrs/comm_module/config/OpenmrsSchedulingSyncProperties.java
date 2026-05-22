@@ -10,10 +10,13 @@ import java.time.ZoneId;
 @ConfigurationProperties(prefix = "openmrs.scheduling.sync")
 public class OpenmrsSchedulingSyncProperties {
 
-    private boolean enabled = true;
+    private boolean enabled = false;
 
     /** legacy = appointmentscheduling_* ; patient-appointment = SPA reference distro. */
     private String source = "patient-appointment";
+
+    /** Uit op reference distro (geen FHIR2 Appointment); Patient-sync kan wel. */
+    private boolean exportAppointment = false;
 
     private int intervalMinutes = 1;
 
@@ -111,5 +114,13 @@ public class OpenmrsSchedulingSyncProperties {
 
     public void setFallbackPhone(String fallbackPhone) {
         this.fallbackPhone = fallbackPhone;
+    }
+
+    public boolean isExportAppointment() {
+        return exportAppointment;
+    }
+
+    public void setExportAppointment(boolean exportAppointment) {
+        this.exportAppointment = exportAppointment;
     }
 }

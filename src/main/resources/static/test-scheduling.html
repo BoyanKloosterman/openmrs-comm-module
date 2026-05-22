@@ -501,7 +501,7 @@
 
     function buildHint(s, poll, dbCount) {
       if (!s.fhirServerUrl) {
-        return { level: 'err', text: 'Geen poll-bron — zet OPENMRS_FHIR_POLL_MODE=jdbc + OPENMRS_DATASOURCE_URL (reference distro).' };
+        return { level: 'err', text: 'Geen poll-bron — zet OPENMRS_FHIR_SERVER_URL en/of OPENMRS_DATASOURCE_URL (JDBC-fallback).' };
       }
       if (s.fhirServerUrl.startsWith('jdbc:')) {
         return { level: 'ok', text: 'JDBC-poll actief (patient_appointment). Boek afspraken in de SPA, start in de toekomst, patiënt met telefoon.' };
