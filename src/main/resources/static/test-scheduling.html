@@ -177,6 +177,7 @@
     }
     th { color: var(--muted); font-weight: 500; }
     tr.ok td { color: var(--ok); }
+    tr.sent td { color: var(--muted); }
     tr.fail td { color: var(--err); }
     tr.warn td { color: var(--warn); }
 
@@ -352,7 +353,9 @@
         <dt>te vroeg</dt>
         <dd>De herinnering is nog niet aan de beurt (bij 1u: afspraak over ~24u → 1u-SMS pas over ~23 uur).</dd>
         <dt>te laat</dt>
-        <dd>Het verzendvenster voor deze herinnering is voorbij (gemist of al verstuurd).</dd>
+        <dd>Het verzendvenster voor deze herinnering is voorbij (nog niet verstuurd).</dd>
+        <dt>verstuurd</dt>
+        <dd>Deze herinnering staat al in de delivery-log (queue of succesvol naar provider).</dd>
         <dt>verleden / geannuleerd / geen tel.</dt>
         <dd>Afspraak is voorbij, voided, of er ontbreekt een telefoonnummer.</dd>
       </dl>
@@ -639,9 +642,28 @@
       ]);
     }
 
-    function rowClassForWindow(status) {
+    function displayWindowLabel(status, alreadySent) {
+      if (alreadySent) return 'verstuurd';
+      return WINDOW_LABELS[status] || status;
+    }
+
+    function rowClassForWindow(status, alreadySent) {
+      if (alreadySent) return 'sent';
       if (status === 'IN_REMINDER_WINDOW') return 'ok';
       if (status === 'MISSING_PHONE' || status === 'TOO_EARLY' || status === 'TOO_LATE') return 'warn';
+      return '';
+    }
+
+    function rowClassForAppointment(r) {
+      if ((!r.alreadySentSuccessfully && r.windowStatus === 'IN_REMINDER_WINDOW')
+          || (!r.alreadySentOneHourSuccessfully && r.oneHourWindowStatus === 'IN_REMINDER_WINDOW')) {
+        return 'ok';
+      }
+      if (r.alreadySentSuccessfully || r.alreadySentOneHourSuccessfully) return 'sent';
+      if (rowClassForWindow(r.windowStatus, false) === 'warn'
+          || rowClassForWindow(r.oneHourWindowStatus, false) === 'warn') {
+        return 'warn';
+      }
       return '';
     }
 
@@ -774,9 +796,9 @@
         document.getElementById('btn-delete-polled').hidden = true;
       }
       body.innerHTML = rows.map(r => {
-        const cls = rowClassForWindow(r.windowStatus);
-        const w24 = WINDOW_LABELS[r.windowStatus] || r.windowStatus;
-        const w1 = WINDOW_LABELS[r.oneHourWindowStatus] || r.oneHourWindowStatus;
+        const cls = rowClassForAppointment(r);
+        const w24 = displayWindowLabel(r.windowStatus, r.alreadySentSuccessfully);
+        const w1 = displayWindowLabel(r.oneHourWindowStatus, r.alreadySentOneHourSuccessfully);
         const selected = r.appointmentFhirId === selectedAppointmentFhirId ? ' selected' : '';
         return `<tr class="appt-row ${cls}${selected}" data-fhir-id="${esc(r.appointmentFhirId)}">
           <td><code>${esc(r.appointmentFhirId)}</code></td>
