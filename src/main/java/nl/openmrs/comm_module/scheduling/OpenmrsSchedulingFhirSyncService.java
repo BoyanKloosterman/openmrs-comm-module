@@ -3,14 +3,15 @@ package nl.openmrs.comm_module.scheduling;
 import nl.openmrs.comm_module.config.OpenmrsSchedulingSyncProperties;
 import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
 import nl.openmrs.comm_module.sync.OpenmrsFhirResourceFactory;
+import nl.openmrs.comm_module.sync.OpenmrsPatientAppointmentJdbcRepository;
 import nl.openmrs.comm_module.sync.OpenmrsSchedulingAppointmentRow;
-import nl.openmrs.comm_module.sync.OpenmrsSchedulingJdbcRepository;
 import nl.openmrs.comm_module.sync.persistence.OpenmrsAppointmentFhirSyncEntity;
 import nl.openmrs.comm_module.sync.persistence.OpenmrsAppointmentFhirSyncRepository;
 import org.hl7.fhir.r5.model.Appointment;
 import org.hl7.fhir.r5.model.Patient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,17 +22,15 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
-/**
- * Exporteert OpenMRS Appointment Scheduling → FHIR R5; daarna pikt {@link OpenmrsFhirPollingService}
- * de resources op in {@code polled_appointment} voor herinneringen.
- */
+/** Export patient_appointment → FHIR R5 (optioneel; uit bij reference-distro JDBC-poll). */
 @Component
+@ConditionalOnProperty(name = "openmrs.scheduling.sync.enabled", havingValue = "true")
 public class OpenmrsSchedulingFhirSyncService {
 
     private static final Logger log = LoggerFactory.getLogger(OpenmrsSchedulingFhirSyncService.class);
 
     private final OpenmrsSchedulingSyncProperties properties;
-    private final OpenmrsSchedulingJdbcRepository schedulingRepository;
+    private final OpenmrsPatientAppointmentJdbcRepository appointmentRepository;
     private final OpenmrsFhirResourceFactory resourceFactory;
     private final OpenmrsFhirOperations fhirOperations;
     private final OpenmrsAppointmentFhirSyncRepository syncRepository;
@@ -39,13 +38,13 @@ public class OpenmrsSchedulingFhirSyncService {
 
     public OpenmrsSchedulingFhirSyncService(
             OpenmrsSchedulingSyncProperties properties,
-            OpenmrsSchedulingJdbcRepository schedulingRepository,
+            OpenmrsPatientAppointmentJdbcRepository appointmentRepository,
             OpenmrsFhirResourceFactory resourceFactory,
             OpenmrsFhirOperations fhirOperations,
             OpenmrsAppointmentFhirSyncRepository syncRepository,
             Clock clock) {
         this.properties = properties;
-        this.schedulingRepository = schedulingRepository;
+        this.appointmentRepository = appointmentRepository;
         this.resourceFactory = resourceFactory;
         this.fhirOperations = fhirOperations;
         this.syncRepository = syncRepository;
@@ -54,9 +53,6 @@ public class OpenmrsSchedulingFhirSyncService {
 
     @Scheduled(fixedDelayString = "#{@openmrsSchedulingSyncProperties.delayMillis()}")
     public void syncOpenmrsAppointmentsToFhir() {
-        if (!properties.isEnabled()) {
-            return;
-        }
         try {
             int synced = runSync();
             if (synced > 0) {
@@ -67,15 +63,19 @@ public class OpenmrsSchedulingFhirSyncService {
         }
     }
 
-    /** Handmatig/sync-tick: exporteert gewijzigde OpenMRS-afspraken naar FHIR. */
     @Transactional
     public int runSync() {
-        ZoneId zone = ZoneId.of(properties.getZoneId());
-        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), zone);
+        if (!properties.isPatientAppointmentSource()) {
+            log.warn("Sync ondersteunt alleen source=patient-appointment");
+            return 0;
+        }
+        ZoneId dbZone = properties.effectiveDbZoneId();
+        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), dbZone);
         LocalDateTime from = now.minusDays(Math.max(0, properties.getLookbackDays()));
         LocalDateTime to = now.plusDays(Math.max(1, properties.getLookaheadDays()));
 
-        List<OpenmrsSchedulingAppointmentRow> rows = schedulingRepository.findAppointmentsBetween(from, to);
+        List<OpenmrsSchedulingAppointmentRow> rows =
+                appointmentRepository.findAppointmentsBetween(from, to);
         int synced = 0;
         for (OpenmrsSchedulingAppointmentRow row : rows) {
             if (row.patientUuid() == null || row.patientUuid().isBlank()) {

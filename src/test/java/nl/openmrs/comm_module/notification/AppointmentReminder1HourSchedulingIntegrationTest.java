@@ -3,6 +3,8 @@ package nl.openmrs.comm_module.notification;
 import nl.openmrs.comm_module.messaging.queue.RabbitMqProducer;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.notification.persistence.NotificationDeliveryLogRepository;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderConfiguration;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderTestSpecs;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
 import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
@@ -92,20 +94,29 @@ class AppointmentReminder1HourSchedulingIntegrationTest {
         verify(rabbitMqProducer, org.mockito.Mockito.atLeastOnce()).publish(captor.capture());
         assertTrue(
                 captor.getAllValues().stream()
-                        .anyMatch(m -> AppointmentReminderMessageBuilder.MESSAGE_TYPE_1H.equals(m.getMessageType())));
+                        .anyMatch(
+                                m ->
+                                        AppointmentReminderConfiguration.MESSAGE_TYPE_1H.equals(
+                                                m.getMessageType())));
     }
 
     @Test
     void eenUurWordtVerstuurdOokAls24uAlSuccesvol() {
         PolledAppointmentEntity apt = saveDueAppointment("apt-both", "+31699998888", Instant.parse("2026-05-18T11:05:00Z"));
-        appointmentReminderPublisher.publish24HourReminders(List.of(apt));
+        appointmentReminderPublisher.publishReminders(
+                List.of(apt), AppointmentReminderTestSpecs.HOURS_24);
 
-        int queued1 = appointmentReminderPublisher.publish1HourReminders(List.of(apt));
+        int queued1 =
+                appointmentReminderPublisher.publishReminders(
+                        List.of(apt), AppointmentReminderTestSpecs.HOURS_1);
 
         assertEquals(1, queued1);
         long count1h =
                 deliveryLogRepository.findAll().stream()
-                        .filter(e -> AppointmentReminderMessageBuilder.MESSAGE_TYPE_1H.equals(e.getMessageType()))
+                        .filter(
+                                e ->
+                                        AppointmentReminderConfiguration.MESSAGE_TYPE_1H.equals(
+                                                e.getMessageType()))
                         .count();
         assertTrue(count1h >= 1);
     }

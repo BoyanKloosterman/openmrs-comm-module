@@ -9,6 +9,7 @@ import org.hl7.fhir.r5.model.ContactPoint;
 import org.hl7.fhir.r5.model.HumanName;
 import org.hl7.fhir.r5.model.Patient;
 import org.hl7.fhir.r5.model.Reference;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -18,6 +19,7 @@ import java.util.Date;
 
 /** Bouwt FHIR R5 Patient/Appointment uit OpenMRS scheduling-rijen. */
 @Component
+@ConditionalOnProperty(name = "openmrs.scheduling.sync.enabled", havingValue = "true")
 public class OpenmrsFhirResourceFactory {
 
     public Patient buildPatient(
