@@ -1,6 +1,5 @@
 package nl.openmrs.comm_module.provider.swiftsend;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.provider.MessagingProviderType;
 import nl.openmrs.comm_module.provider.ProviderSendResult;
@@ -26,7 +25,7 @@ class SwiftSendProviderTest {
     @BeforeEach
     void setUp() {
         swiftSendClient = mock(SwiftSendClient.class);
-        swiftSendProvider = new SwiftSendProvider(swiftSendClient, new ObjectMapper());
+        swiftSendProvider = new SwiftSendProvider(swiftSendClient);
     }
 
     @Test
