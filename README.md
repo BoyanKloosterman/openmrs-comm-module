@@ -28,16 +28,15 @@ Doelgroep van deze documentatie: **technisch beheerders** van een OpenMRS-organi
 
 ## Architectuur en datastroom
 
-In de **referentie-stack** (Docker Compose) draaien naast de comm-module ook een OpenMRS-referentie, een standalone **FHIR R5**-server (HAPI) en een gesimuleerde provider (`fakecomworld`). In productie koppelt u aan **uw** OpenMRS- en FHIR-endpoints.
+Lokaal draait **OpenMRS 3 Reference Application** in een **aparte** Docker-stack ([openmrs-distro-referenceapplication](https://github.com/openmrs/openmrs-distro-referenceapplication)). Deze repository start alleen de comm-module-stack (Postgres, RabbitMQ, fake provider, observability). Afspraken maak je in de distro-SPA; de module pollt **FHIR2 R5** op die instantie.
 
 ```mermaid
 flowchart LR
-  subgraph openmrs_org [OpenMRS-organisatie]
-    OMRS[OpenMRS<br/>Appointment Scheduling]
-    FHIR[FHIR R5 REST<br/>Appointment + Patient]
+  subgraph distro [OpenMRS 3 distro — aparte compose]
+    SPA[Bahmni appointments SPA]
+    FHIR[FHIR2 R5<br/>Appointment + Patient]
   end
   subgraph comm [Communicatiemodule]
-    SYNC[Scheduling → FHIR sync]
     POLL[FHIR poll]
     SCHED[Herinnerings-scheduler]
     RMQ[RabbitMQ producer]
@@ -46,8 +45,7 @@ flowchart LR
     Q[RabbitMQ queues]
     PROV[Messaging providers]
   end
-  OMRS --> SYNC
-  SYNC --> FHIR
+  SPA --> FHIR
   FHIR --> POLL
   POLL --> SCHED
   SCHED --> RMQ
@@ -57,10 +55,12 @@ flowchart LR
 
 **Kernstappen in de keten**
 
-1. **OpenMRS → FHIR** (optioneel, als u Appointment Scheduling in OpenMRS gebruikt): periodieke export van afspraken naar FHIR R5 (`OPENMRS_SCHEDULING_FHIR_SYNC_*`). In Docker deelt de module de Postgres-database met OpenMRS; in productie kan dit dezelfde database zijn of een aparte integratielaag — afhankelijk van uw architectuur.
-2. **FHIR poll**: de module leest op interval nieuwe/gewijzigde `Appointment`-resources (`OPENMRS_FHIR_*`) en slaat ze op als `polled_appointment`.
+1. **Afspraken in OpenMRS**: via de distro, bijv. http://localhost/openmrs/spa/home/appointments (Bahmni appointments).
+2. **FHIR poll**: de module leest op interval `Appointment`-resources van `OPENMRS_FHIR_SERVER_URL` (standaard `…/openmrs/ws/fhir2/R5`) en slaat ze op als `polled_appointment`.
 3. **Scheduler**: afspraken in het geconfigureerde tijdvenster (24u / 1u lead) worden als bericht op de juiste provider-queue gezet.
-4. **Consumer**: RabbitMQ-workers sturen via de gekozen provider; mislukte pogingen worden gelogd en opnieuw geprobeerd.
+4. **Consumer**: RabbitMQ-workers sturen via de gekozen provider; resultaat staat in `notification_delivery_log` (zichtbaar in de logmonitor-GUI).
+
+Optioneel: **JDBC scheduling-sync** (`OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=true`) exporteert Legacy Appointment Scheduling naar een aparte FHIR-server — niet gebruikt met de externe distro.
 
 Besluitvorming over de koppeling staat in [docs/ADR-3-hoe-koppelen-we-aan-openmrs.md](docs/ADR-3-hoe-koppelen-we-aan-openmrs.md) (FHIR polling i.p.v. webhooks).
 
@@ -72,7 +72,7 @@ Besluitvorming over de koppeling staat in [docs/ADR-3-hoe-koppelen-we-aan-openmr
 
 | Vereiste | Toelichting |
 |----------|-------------|
-| OpenMRS **2.7+** | Getest in de referentie-image met Legacy UI en Appointment Scheduling-module. |
+| OpenMRS **3 Reference Application** | Aparte stack; Bahmni appointments + FHIR2 R5. |
 | Werkende **FHIR R5 REST**-API | `Appointment` en gekoppelde `Patient` (telefoon voor SMS). De module pollt deze API; OpenMRS FHIR2 of een aparte HAPI-server is mogelijk, zolang de base-URL en auth kloppen. |
 | Bereikbare netwerkverbinding | Van de comm-module naar OpenMRS (indien sync), FHIR-base-URL, RabbitMQ, Postgres en provider-API’s. |
 | PostgreSQL | Eigen database voor module-tabellen (`polled_appointment`, organisatieconfig, delivery logs). |
@@ -92,11 +92,10 @@ Besluitvorming over de koppeling staat in [docs/ADR-3-hoe-koppelen-we-aan-openmr
    - `OPENMRS_FHIR_ORGANISATION_ID` — tenant-sleutel voor opslag; bij meerdere bronnen later per organisatie via API (zie hieronder).  
    - Optioneel: `OPENMRS_FHIR_POLL_INTERVAL_MINUTES`, `OPENMRS_FHIR_APPOINTMENT_POLL_SINCE_DAYS`, retry-instellingen (zie `.env.example`).
 
-4. **OpenMRS scheduling-sync** (indien afspraken uit OpenMRS Legacy Scheduling komen)  
-   - `OPENMRS_URL` — interne OpenMRS-base (voor test-GUI en sync).  
-   - `OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=true`  
-   - `OPENMRS_SCHEDULING_SYNC_ZONE` — tijdzone voor afspraaktijden (bijv. `Europe/Amsterdam`).  
-   - `OPENMRS_SCHEDULING_SYNC_FALLBACK_PHONE` — alleen voor test/ontwikkeling als patiënten geen telefoonattribuut hebben.
+4. **OpenMRS scheduling-sync** (alleen Legacy Scheduling + gedeelde Postgres, niet voor de distro)  
+   - `OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=false` bij FHIR-poll op de distro.  
+   - `OPENMRS_SCHEDULING_SYNC_ZONE` — tijdzone bij JDBC-export.  
+   - `OPENMRS_SCHEDULING_SYNC_FALLBACK_PHONE` — alleen voor test als patiënten geen telefoonattribuut hebben.
 
 5. **Herinneringen**  
    - `COMM_NOTIFICATION_REMINDER_LEAD_HOURS` (standaard 24)  
@@ -132,7 +131,7 @@ Besluitvorming over de koppeling staat in [docs/ADR-3-hoe-koppelen-we-aan-openmr
 | **TLS** | Client-TLS 1.3 is geconfigureerd; zorg dat FHIR- en provider-endpoints geldige certificaten hebben. |
 | **Encryptiesleutel** | Nooit roteren zonder migratieplan voor versleutelde velden. |
 | **Test-endpoints** | `/api/notifications/test` en `/api/test/scheduling` zijn bedoeld voor ontwikkeling/demo — beperk in productie via netwerk of reverse proxy. |
-| **Docker-referentie ≠ productie** | Compose start HAPI FHIR op poort 8082; productie wijst `OPENMRS_FHIR_SERVER_URL` naar uw echte FHIR-server. |
+| **Docker-referentie ≠ productie** | Lokaal: distro op poort 80, comm-module op 8081; `OPENMRS_FHIR_SERVER_URL` wijst naar FHIR2 R5 van uw OpenMRS. |
 
 Volledige variabelenlijst: [.env.example](.env.example).
 
@@ -140,14 +139,30 @@ Volledige variabelenlijst: [.env.example](.env.example).
 
 ## Snel starten met Docker
 
-De repository bevat een **volledige lokale stack**: PostgreSQL, RabbitMQ, FHIR R5 (HAPI + seed), OpenMRS-referentie, comm-module, fake provider, Prometheus en Grafana.
+Twee stacks: eerst de **OpenMRS 3 distro**, daarna deze **comm-module**.
 
 ### Vereisten
 
 - [Docker](https://docs.docker.com/get-docker/) en Docker Compose v2
-- Poorten vrij: **8080** (OpenMRS), **8081** (comm-module), **8082** (FHIR), **5432**, **5672**, **15672**, **9090**, **3000**
+- Poorten vrij: **80** (distro gateway), **8081** (comm-module), **5432**, **5672**, **15672**, **9090**, **3000**
 
-### Stap 1 — Omgevingsvariabelen
+### Stap 0 — OpenMRS Reference Application (aparte map)
+
+```bash
+git clone https://github.com/openmrs/openmrs-distro-referenceapplication.git
+cd openmrs-distro-referenceapplication
+docker compose up -d
+```
+
+Wacht tot gateway/backend klaar zijn. UI: http://localhost/openmrs/spa — afspraken: http://localhost/openmrs/spa/home/appointments (standaard login `admin` / `Admin123`).
+
+Controleer FHIR2 R5 vanaf de host:
+
+```bash
+curl -sS -u admin:Admin123 http://localhost/openmrs/ws/fhir2/R5/metadata
+```
+
+### Stap 1 — Omgevingsvariabelen (comm-module)
 
 `docker-compose.yml` leest **alleen** uit `.env` (geen defaults in Git).
 
@@ -155,39 +170,44 @@ De repository bevat een **volledige lokale stack**: PostgreSQL, RabbitMQ, FHIR R
 cp .env.example .env
 ```
 
-Pas in `.env` minimaal alle `changeme`-waarden aan. Gebruikersnamen en hostnamen in het voorbeeld sluiten aan op de servicenamen in Compose (`postgres`, `rabbitmq`, `fhir-r5`, `openmrs`).
+Pas minimaal alle `changeme`-waarden aan. Belangrijk:
 
-Belangrijk voor een stabiele demo:
+- `APP_ENCRYPTION_KEY` — precies **32 tekens**, stabiel tussen runs.
+- `OPENMRS_FHIR_SERVER_URL=http://host.docker.internal/openmrs/ws/fhir2/R5` — bereikbaar vanuit de comm-module-container.
+- `OPENMRS_FHIR_USERNAME` / `OPENMRS_FHIR_PASSWORD` — distro-credentials (standaard `admin` / `Admin123`).
+- `OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=false` — geen JDBC-export (distro gebruikt MariaDB).
 
-- `APP_ENCRYPTION_KEY` — precies **32 tekens**, niet wijzigen tussen runs tenzij u volumes wist.
-- `OPENMRS_FHIR_SERVER_URL=http://fhir-r5:8080/fhir` — zoals in `.env.example` voor Docker.
-
-### Stap 2 — Stack bouwen en starten
-
-Eerste start kan **enkele minuten** duren (FHIR metadata, OpenMRS healthcheck).
+### Stap 2 — Comm-module-stack starten
 
 ```bash
 docker compose up -d --build
 ```
 
-Status controleren:
-
 ```bash
 docker compose ps
 ```
 
-Wacht tot `comm-module-app` **healthy** is. De comm-module start pas na `fhir-r5-seed` (FHIR `/metadata` bereikbaar).
+Wacht tot `comm-module-app` **healthy** is.
 
 ### Stap 3 — Controleren
 
 | Check | URL / commando |
 |-------|----------------|
 | Comm-module health | http://localhost:8081/actuator/health |
-| OpenMRS UI | http://localhost:8080/openmrs — gebruiker `admin`, wachtwoord uit `.env` (`OMRS_ADMIN_USER_PASSWORD`) |
-| FHIR R5 (host) | http://localhost:8082/fhir/metadata |
+| OpenMRS distro SPA | http://localhost/openmrs/spa |
+| Afspraken (Bahmni) | http://localhost/openmrs/spa/home/appointments |
+| FHIR2 R5 metadata | `curl -u admin:Admin123 http://localhost/openmrs/ws/fhir2/R5/metadata` |
+| Logmonitor (poll + delivery log) | http://localhost:8081/test-scheduling.html |
 | RabbitMQ Management | http://localhost:15672 — credentials uit `.env` |
-| Scheduling test-GUI | http://localhost:8081/test-scheduling.html |
 | Grafana | http://localhost:3000 — `GRAFANA_ADMIN_*` uit `.env` |
+
+### Stap 4 — End-to-end test
+
+1. Maak in de distro een afspraak voor een patiënt **met telefoonnummer**.
+2. Open de logmonitor; klik **FHIR poll nu** (of wacht op interval).
+3. Controleer **Polled appointments** en later **Delivery log** (scheduler + fake provider).
+
+Zie [docs/docker-scheduling-test.md](docs/docker-scheduling-test.md) voor venster-instellingen (24u / 1u).
 
 ### Stack stoppen
 
@@ -195,13 +215,7 @@ Wacht tot `comm-module-app` **healthy** is. De comm-module start pas na `fhir-r5
 docker compose down
 ```
 
-Volumes behouden data. Volledige reset (alle compose-volumes, inclusief OpenMRS-data):
-
-```bash
-docker compose down -v
-```
-
-Na wijziging aan de OpenMRS Docker-image: `docker compose build openmrs` en stack herstarten. Blijft de oude UI zichtbaar, wis volume `openmrs_data` of gebruik `down -v`.
+Volumes behouden comm-module-data. Volledige reset: `docker compose down -v`.
 
 ---
 
@@ -243,9 +257,9 @@ docker compose logs -f comm-module
 
 ### 2. Volledige keten — afspraakherinnering (scheduling)
 
-Voor de end-to-end flow (OpenMRS → FHIR → poll → scheduler → delivery log) gebruikt u de test-GUI of het stappenplan:
+Voor de end-to-end flow (distro-afspraak → FHIR poll → scheduler → delivery log) gebruikt u de logmonitor of het stappenplan:
 
-- Browser: http://localhost:8081/test-scheduling.html  
+- Browser: http://localhost:8081/test-scheduling.html (alleen poll-status en delivery logs)  
 - Uitgebreid stappenplan: [docs/docker-scheduling-test.md](docs/docker-scheduling-test.md)
 
 Handmatige API-check (status van scheduler en vensters):
@@ -260,10 +274,9 @@ curl -sS http://localhost:8081/api/test/scheduling/status
 
 | Service | Hostpoort | Rol |
 |---------|-----------|-----|
-| `openmrs` | 8080 | Referentie OpenMRS 2.7 + scheduling |
+| *(extern)* distro gateway | 80 | OpenMRS 3 + Bahmni appointments (aparte compose) |
 | `comm-module` | 8081 | Deze applicatie |
-| `fhir-r5` | 8082 | Standalone FHIR R5 (demo; niet OpenMRS FHIR2) |
-| `postgres` | 5432 | Database |
+| `postgres` | 5432 | Database comm-module |
 | `rabbitmq` | 5672, 15672 | AMQP + management UI |
 | `fakecomworld` | 1337 | Gesimuleerde messaging-API |
 | `prometheus` | 9090 | Metrics scrape |
@@ -342,7 +355,7 @@ openmrs-comm-module/
 │   ├── application.properties              # Defaults (override via env)
 │   └── db/init/                            # Postgres init scripts
 ├── docker-compose.yml                      # Volledige lokale stack
-├── docker/                                 # OpenMRS-image, FHIR-config, Grafana, OTEL
+├── docker/                                 # Grafana, OTEL; oude OpenMRS-image (niet in compose)
 ├── .env.example                            # Voorbeeld omgevingsvariabelen
 ├── Dockerfile                              # Comm-module container
 └── docs/                                   # ADR’s en testplannen

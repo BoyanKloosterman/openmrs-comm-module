@@ -6,9 +6,6 @@ import org.hl7.fhir.r5.model.Appointment;
 import org.hl7.fhir.r5.model.Patient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Primary;
-import org.springframework.stereotype.Component;
-
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.time.Instant;
@@ -18,8 +15,6 @@ import java.util.Optional;
 /**
  * Retry rond ruwe {@link OpenmrsFhirClient} (US-003-7); alleen tijdelijke fouten.
  */
-@Component
-@Primary
 public class RetryingOpenmrsFhirOperations implements OpenmrsFhirOperations {
 
     private static final Logger log = LoggerFactory.getLogger(RetryingOpenmrsFhirOperations.class);

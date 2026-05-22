@@ -4,10 +4,13 @@ import nl.openmrs.comm_module.messaging.fhir.dto.AppointmentPollDto;
 import nl.openmrs.comm_module.messaging.fhir.dto.AppointmentWithPatientDto;
 import nl.openmrs.comm_module.messaging.fhir.dto.PatientPollDto;
 import nl.openmrs.comm_module.notification.voided.VoidedAppointmentCoordinator;
+import nl.openmrs.comm_module.poll.AppointmentPollExclusionService;
 import nl.openmrs.comm_module.poll.AppointmentPollPersistence;
+import nl.openmrs.comm_module.poll.PollDiagnosticsRecorder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 
@@ -16,25 +19,43 @@ public class JpaAppointmentPollPersistence implements AppointmentPollPersistence
 
     private final PolledAppointmentRepository repository;
     private final PolledAppointmentExclusionRepository exclusionRepository;
+    private final AppointmentPollExclusionService pollExclusionService;
     private final VoidedAppointmentCoordinator voidedAppointmentCoordinator;
+    private final Clock clock;
+    private final PollDiagnosticsRecorder pollDiagnosticsRecorder;
 
     public JpaAppointmentPollPersistence(
             PolledAppointmentRepository repository,
             PolledAppointmentExclusionRepository exclusionRepository,
-            VoidedAppointmentCoordinator voidedAppointmentCoordinator) {
+            AppointmentPollExclusionService pollExclusionService,
+            VoidedAppointmentCoordinator voidedAppointmentCoordinator,
+            Clock clock,
+            PollDiagnosticsRecorder pollDiagnosticsRecorder) {
         this.repository = repository;
         this.exclusionRepository = exclusionRepository;
+        this.pollExclusionService = pollExclusionService;
         this.voidedAppointmentCoordinator = voidedAppointmentCoordinator;
+        this.clock = clock;
+        this.pollDiagnosticsRecorder = pollDiagnosticsRecorder;
     }
 
     @Override
     @Transactional
     public void upsertPollResults(String organisationId, List<AppointmentWithPatientDto> appointmentsWithPatients) {
-        Instant now = Instant.now();
+        Instant now = clock.instant();
+        int saved = 0;
+        int skippedPast = 0;
+        int skippedExcluded = 0;
         for (AppointmentWithPatientDto row : appointmentsWithPatients) {
             AppointmentPollDto a = row.appointment();
             if (exclusionRepository.existsByOrganisationIdAndAppointmentFhirId(
                     organisationId, a.appointmentId())) {
+                skippedExcluded++;
+                continue;
+            }
+            if (isPastAppointment(a, now)) {
+                pollExclusionService.excludeIfAbsent(organisationId, a.appointmentId(), now);
+                skippedPast++;
                 continue;
             }
             PolledAppointmentEntity entity = repository
@@ -43,8 +64,24 @@ public class JpaAppointmentPollPersistence implements AppointmentPollPersistence
             boolean wasVoidedBefore = entity.getId() != null && entity.isVoided();
             applyAppointment(entity, organisationId, a, row.patient(), now);
             repository.save(entity);
+            saved++;
             voidedAppointmentCoordinator.notifyIfVoided(entity, wasVoidedBefore);
         }
+        excludePastStillStored(organisationId, now);
+        pollDiagnosticsRecorder.addPersistStats(saved, skippedPast, skippedExcluded);
+    }
+
+    /** Bestaande DB-rijen die inmiddels voorbij zijn: uitsluiten zonder opnieuw te upserten. */
+    private void excludePastStillStored(String organisationId, Instant now) {
+        for (PolledAppointmentEntity stored :
+                repository.findByOrganisationIdAndAppointmentDatetimeLessThanEqual(organisationId, now)) {
+            pollExclusionService.excludeIfAbsent(organisationId, stored.getAppointmentFhirId(), now);
+        }
+    }
+
+    private static boolean isPastAppointment(AppointmentPollDto appointment, Instant now) {
+        Instant start = appointment.appointmentDatetime();
+        return start == null || !start.isAfter(now);
     }
 
     private static void applyAppointment(

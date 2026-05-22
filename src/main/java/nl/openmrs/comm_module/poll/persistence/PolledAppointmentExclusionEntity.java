@@ -10,7 +10,7 @@ import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 
-/** Test-GUI: FHIR-poll mag deze afspraak niet opnieuw in polled_appointment zetten. */
+/** FHIR-poll slaat deze afspraak over (verleden of handmatig uitgesloten). */
 @Entity
 @Table(
         name = "polled_appointment_exclusion",
