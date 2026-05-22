@@ -24,6 +24,7 @@ class OpenmrsFhirResourceFactoryTest {
         factory = new OpenmrsFhirResourceFactory();
         properties = new OpenmrsSchedulingSyncProperties();
         properties.setZoneId("Europe/Amsterdam");
+        properties.setDbZoneId("UTC");
         properties.setFallbackPhone("+31612345678");
     }
 
@@ -36,7 +37,9 @@ class OpenmrsFhirResourceFactoryTest {
     }
 
     @Test
-    void zetStartInAmsterdamZoneNaarUtc() {
+    void zetStartViaDbZoneNaarInstant() {
+        // SPA reference distro: 13:05 in DB (UTC) = 15:05 in NL — niet als Amsterdam lezen.
+        LocalDateTime dbStart = LocalDateTime.of(2026, 5, 23, 13, 5);
         OpenmrsSchedulingAppointmentRow row = new OpenmrsSchedulingAppointmentRow(
                 2,
                 "appt-uuid",
@@ -47,8 +50,8 @@ class OpenmrsFhirResourceFactoryTest {
                 "uuid-1",
                 "Boyan",
                 "Kloosd",
-                LocalDateTime.of(2026, 5, 20, 8, 0),
-                LocalDateTime.of(2026, 5, 20, 9, 0),
+                dbStart,
+                LocalDateTime.of(2026, 5, 23, 14, 5),
                 "Consult",
                 "loc-uuid",
                 "Unknown",
@@ -56,8 +59,14 @@ class OpenmrsFhirResourceFactoryTest {
                 null);
 
         Appointment appointment = factory.buildAppointment(row, properties);
-        ZonedDateTime expected = ZonedDateTime.of(2026, 5, 20, 8, 0, 0, 0, ZoneId.of("Europe/Amsterdam"));
-        assertEquals(expected.toInstant(), appointment.getStart().toInstant());
+        ZonedDateTime expectedUtc = dbStart.atZone(ZoneId.of("UTC"));
+        assertEquals(expectedUtc.toInstant(), appointment.getStart().toInstant());
+        assertEquals(
+                "15:05",
+                expectedUtc
+                        .withZoneSameInstant(ZoneId.of("Europe/Amsterdam"))
+                        .toLocalTime()
+                        .toString());
         assertEquals(Appointment.AppointmentStatus.BOOKED, appointment.getStatus());
     }
 

@@ -49,9 +49,10 @@ public class OpenmrsFhirResourceFactory {
 
     public Appointment buildAppointment(
             OpenmrsSchedulingAppointmentRow row, OpenmrsSchedulingSyncProperties properties) {
-        ZoneId zone = ZoneId.of(properties.getZoneId());
-        Instant start = toInstant(row.startDate(), zone);
-        Instant end = toInstant(row.endDate(), zone);
+        // Zelfde zone als JDBC-poll: naive start_date_time in MariaDB (meestal UTC bij SPA).
+        ZoneId dbZone = properties.effectiveDbZoneId();
+        Instant start = toInstant(row.startDate(), dbZone);
+        Instant end = toInstant(row.endDate(), dbZone);
 
         Appointment appointment = new Appointment();
         appointment.setId(row.fhirAppointmentId());

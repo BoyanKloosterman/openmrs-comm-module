@@ -61,12 +61,9 @@ services:
       SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: ca.uhn.fhir.jpa.model.dialect.HapiFhirH2Dialect
     ports:
       - "8082:8080"
+    # hapiproject/hapi is distroless (geen curl/sh) — healthcheck via curl faalt altijd
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/fhir/metadata"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 120s
+      disable: true
     networks:
       - comm-network
     restart: unless-stopped
@@ -95,7 +92,7 @@ services:
       rabbitmq:
         condition: service_healthy
       hapi-fhir-r5:
-        condition: service_healthy
+        condition: service_started
       otel-collector:
         condition: service_started
       fakecomworld:
