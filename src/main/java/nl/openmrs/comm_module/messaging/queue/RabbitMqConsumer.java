@@ -68,10 +68,23 @@ public class RabbitMqConsumer {
         }
         MessagingProvider provider = providerFactory.getProvider(message.getProvider());
 
-        String credentialsJson = organisationConfigService.getDecryptedCredentials(
-                message.getOrganisationId(),
-                message.getProvider()
-        );
+        String credentialsJson;
+        try {
+            credentialsJson = organisationConfigService.getDecryptedCredentials(
+                    message.getOrganisationId(),
+                    message.getProvider());
+        } catch (IllegalArgumentException e) {
+            String error = e.getMessage();
+            log.error(
+                    "Notificatie afgebroken (geen organisatieconfig): notificationId={} org={} provider={}: {}",
+                    message.getNotificationId(),
+                    message.getOrganisationId(),
+                    message.getProvider(),
+                    error);
+            ProviderSendResult configFailure = ProviderSendResult.failed(error);
+            deliveryLogService.recordProviderAttempt(message, configFailure);
+            throw new AmqpRejectAndDontRequeueException(error, e);
+        }
 
         ProviderSendResult result = provider.sendMessage(message, credentialsJson);
         deliveryLogService.recordProviderAttempt(message, result);
