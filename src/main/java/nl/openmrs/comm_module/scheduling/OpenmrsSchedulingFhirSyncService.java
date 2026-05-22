@@ -7,6 +7,7 @@ import nl.openmrs.comm_module.sync.OpenmrsPatientAppointmentJdbcRepository;
 import nl.openmrs.comm_module.sync.OpenmrsSchedulingAppointmentRow;
 import nl.openmrs.comm_module.sync.persistence.OpenmrsAppointmentFhirSyncEntity;
 import nl.openmrs.comm_module.sync.persistence.OpenmrsAppointmentFhirSyncRepository;
+import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import org.hl7.fhir.r5.model.Appointment;
 import org.hl7.fhir.r5.model.Patient;
 import org.slf4j.Logger;
@@ -82,9 +83,17 @@ public class OpenmrsSchedulingFhirSyncService {
                 log.warn("OpenMRS appointment {} overgeslagen: geen patient uuid", row.appointmentId());
                 continue;
             }
-            if (needsSync(row)) {
+            if (!needsSync(row)) {
+                continue;
+            }
+            try {
                 exportRow(row);
                 synced++;
+            } catch (RuntimeException e) {
+                log.warn(
+                        "OpenMRS→FHIR sync overgeslagen voor appointment {}: {}",
+                        row.appointmentId(),
+                        shortMessage(e));
             }
         }
         return synced;
@@ -101,15 +110,22 @@ public class OpenmrsSchedulingFhirSyncService {
         Patient patient = resourceFactory.buildPatient(row, properties);
         Appointment appointment = resourceFactory.buildAppointment(row, properties);
 
-        fhirOperations.upsertPatient(patient);
-        fhirOperations.upsertAppointment(appointment);
+        try {
+            fhirOperations.upsertPatient(patient);
+        } catch (RuntimeException e) {
+            throw new IllegalStateException(
+                    "Patient niet naar FHIR R5 geschreven (HAPI-URL?): " + shortMessage(e), e);
+        }
+        if (properties.isExportAppointment()) {
+            upsertAppointmentOrSkip(row, appointment);
+        }
 
         OpenmrsAppointmentFhirSyncEntity sync = syncRepository
                 .findByOpenmrsAppointmentId(row.appointmentId())
                 .orElseGet(OpenmrsAppointmentFhirSyncEntity::new);
         sync.setOpenmrsAppointmentId(row.appointmentId());
         sync.setFhirAppointmentId(row.fhirAppointmentId());
-        sync.setFhirPatientId(row.fhirPatientId());
+        sync.setFhirPatientId(row.patientUuid());
         sync.setLastSyncToken(row.syncToken());
         sync.setLastSyncedAt(Instant.now(clock));
         syncRepository.save(sync);
@@ -120,5 +136,27 @@ public class OpenmrsSchedulingFhirSyncService {
                 row.fhirAppointmentId(),
                 row.fhirPatientId(),
                 row.status());
+    }
+
+    private void upsertAppointmentOrSkip(OpenmrsSchedulingAppointmentRow row, Appointment appointment) {
+        try {
+            fhirOperations.upsertAppointment(appointment);
+        } catch (BaseServerResponseException e) {
+            if (e.getStatusCode() == 404) {
+                throw new IllegalStateException(
+                        "FHIR R5 Appointment niet geschreven; controleer HAPI-server en sync-config",
+                        e);
+            }
+            throw e;
+        }
+    }
+
+    private static String shortMessage(Throwable t) {
+        String msg = t.getMessage();
+        if (msg == null) {
+            return t.getClass().getSimpleName();
+        }
+        String first = msg.split("\\R", 2)[0];
+        return first.length() > 160 ? first.substring(0, 160) + "..." : first;
     }
 }

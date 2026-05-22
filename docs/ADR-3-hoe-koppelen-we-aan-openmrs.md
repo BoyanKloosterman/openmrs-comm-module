@@ -26,7 +26,13 @@ Real-time, maar als de module offline is gaan pushberichten verloren. OpenMRS he
 
 ## Beslissing
 
-**FHIR REST API polling.**
+**FHIR REST API polling**, met **JDBC-fallback** (`patient_appointment`) wanneer FHIR2 geen `Appointment` levert (reference distro) of de FHIR-call faalt.
+
+| Modus | Gedrag |
+|-------|--------|
+| `openmrs.fhir.poll-mode=fhir` (standaard) | Eerst FHIR R5; bij fout → JDBC als `openmrs.fhir.jdbc-fallback-enabled=true` en MariaDB geconfigureerd |
+| `poll-mode=jdbc` | Alleen JDBC (test/legacy) |
+| `openmrs.scheduling.sync.enabled=true` | SPA-rijen (JDBC) naar **HAPI FHIR R5** exporteren; OpenMRS FHIR2/R4 heeft geen Appointment |
 
 ## Scenario's
 
