@@ -1,5 +1,7 @@
 package nl.openmrs.comm_module.provider.swiftsend;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.provider.MessagingProvider;
 import nl.openmrs.comm_module.provider.MessagingProviderType;
@@ -12,6 +14,7 @@ import java.util.List;
 public class SwiftSendProvider implements MessagingProvider {
 
     private final SwiftSendClient swiftSendClient;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public SwiftSendProvider(SwiftSendClient swiftSendClient) {
         this.swiftSendClient = swiftSendClient;
@@ -23,15 +26,22 @@ public class SwiftSendProvider implements MessagingProvider {
     }
 
     @Override
-    public ProviderSendResult sendMessage(NotificationQueueMessage message) {
-        SwiftSendRequest request = new SwiftSendRequest(
-                "SMS",
-                List.of(message.getRecipient()),
-                message.getBody()
-        );
-
+    public ProviderSendResult sendMessage(NotificationQueueMessage message, String credentialsJson) {
         try {
-            SwiftSendResponse response = swiftSendClient.send(request);
+            JsonNode credentials = objectMapper.readTree(credentialsJson);
+            String apiKey = credentials.path("apiKey").asText(null);
+
+            if (apiKey == null || apiKey.isBlank()) {
+                return ProviderSendResult.failed("SwiftSend credentials missing apiKey");
+            }
+
+            SwiftSendRequest request = new SwiftSendRequest(
+                    "SMS",
+                    List.of(message.getRecipient()),
+                    message.getBody()
+            );
+
+            SwiftSendResponse response = swiftSendClient.send(request, apiKey);
 
             if (response == null) {
                 return ProviderSendResult.failed("SwiftSend returned an empty response");
@@ -50,6 +60,8 @@ public class SwiftSendProvider implements MessagingProvider {
             return ProviderSendResult.success(response.getMessageId());
         } catch (SwiftSendApiException exception) {
             return ProviderSendResult.failed(exception.getMessage());
+        } catch (Exception exception) {
+            return ProviderSendResult.failed("SwiftSend credential parsing failed: " + exception.getMessage());
         }
     }
 }

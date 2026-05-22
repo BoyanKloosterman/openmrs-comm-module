@@ -1,5 +1,6 @@
 package nl.openmrs.comm_module.provider.swiftsend;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.provider.MessagingProviderType;
 import nl.openmrs.comm_module.provider.ProviderSendResult;
@@ -12,9 +13,12 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class SwiftSendProviderTest {
+
+    private static final String CREDENTIALS_JSON = "{\"apiKey\":\"test-swiftsend-key\"}";
 
     private SwiftSendClient swiftSendClient;
     private SwiftSendProvider swiftSendProvider;
@@ -22,7 +26,7 @@ class SwiftSendProviderTest {
     @BeforeEach
     void setUp() {
         swiftSendClient = mock(SwiftSendClient.class);
-        swiftSendProvider = new SwiftSendProvider(swiftSendClient);
+        swiftSendProvider = new SwiftSendProvider(swiftSendClient, new ObjectMapper());
     }
 
     @Test
@@ -38,23 +42,25 @@ class SwiftSendProviderTest {
         when(response.getMessageId()).thenReturn("message-123");
         when(response.getFailedRecipients()).thenReturn(List.of());
 
-        when(swiftSendClient.send(any(SwiftSendRequest.class))).thenReturn(response);
+        when(swiftSendClient.send(any(SwiftSendRequest.class), eq("test-swiftsend-key")))
+                .thenReturn(response);
 
-        ProviderSendResult result = swiftSendProvider.sendMessage(createMessage());
+        ProviderSendResult result = swiftSendProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertTrue(result.isSuccessful());
         assertEquals("SENT", result.getStatus());
         assertEquals("message-123", result.getProviderMessageId());
         assertNull(result.getErrorMessage());
 
-        verify(swiftSendClient).send(any(SwiftSendRequest.class));
+        verify(swiftSendClient).send(any(SwiftSendRequest.class), eq("test-swiftsend-key"));
     }
 
     @Test
     void sendMessage_whenSwiftSendReturnsNull_returnsFailedResult() {
-        when(swiftSendClient.send(any(SwiftSendRequest.class))).thenReturn(null);
+        when(swiftSendClient.send(any(SwiftSendRequest.class), eq("test-swiftsend-key")))
+                .thenReturn(null);
 
-        ProviderSendResult result = swiftSendProvider.sendMessage(createMessage());
+        ProviderSendResult result = swiftSendProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertFalse(result.isSuccessful());
         assertEquals("FAILED", result.getStatus());
@@ -69,9 +75,10 @@ class SwiftSendProviderTest {
         when(response.isSuccess()).thenReturn(false);
         when(response.getError()).thenReturn("Invalid recipient");
 
-        when(swiftSendClient.send(any(SwiftSendRequest.class))).thenReturn(response);
+        when(swiftSendClient.send(any(SwiftSendRequest.class), eq("test-swiftsend-key")))
+                .thenReturn(response);
 
-        ProviderSendResult result = swiftSendProvider.sendMessage(createMessage());
+        ProviderSendResult result = swiftSendProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertFalse(result.isSuccessful());
         assertEquals("FAILED", result.getStatus());
@@ -87,9 +94,10 @@ class SwiftSendProviderTest {
         when(response.getMessageId()).thenReturn("message-123");
         when(response.getFailedRecipients()).thenReturn(List.of("+31698765432"));
 
-        when(swiftSendClient.send(any(SwiftSendRequest.class))).thenReturn(response);
+        when(swiftSendClient.send(any(SwiftSendRequest.class), eq("test-swiftsend-key")))
+                .thenReturn(response);
 
-        ProviderSendResult result = swiftSendProvider.sendMessage(createMessage());
+        ProviderSendResult result = swiftSendProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertFalse(result.isSuccessful());
         assertEquals("FAILED", result.getStatus());
@@ -99,15 +107,26 @@ class SwiftSendProviderTest {
 
     @Test
     void sendMessage_whenClientThrowsApiException_returnsFailedResult() {
-        when(swiftSendClient.send(any(SwiftSendRequest.class)))
+        when(swiftSendClient.send(any(SwiftSendRequest.class), eq("test-swiftsend-key")))
                 .thenThrow(new SwiftSendApiException("SwiftSend API error. Status: 401"));
 
-        ProviderSendResult result = swiftSendProvider.sendMessage(createMessage());
+        ProviderSendResult result = swiftSendProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertFalse(result.isSuccessful());
         assertEquals("FAILED", result.getStatus());
         assertNull(result.getProviderMessageId());
         assertEquals("SwiftSend API error. Status: 401", result.getErrorMessage());
+    }
+
+    @Test
+    void sendMessage_whenCredentialsDoNotContainApiKey_returnsFailedResult() {
+        ProviderSendResult result = swiftSendProvider.sendMessage(createMessage(), "{}");
+
+        assertFalse(result.isSuccessful());
+        assertEquals("FAILED", result.getStatus());
+        assertEquals("SwiftSend credentials missing apiKey", result.getErrorMessage());
+
+        verify(swiftSendClient, never()).send(any(SwiftSendRequest.class), any());
     }
 
     private NotificationQueueMessage createMessage() {
