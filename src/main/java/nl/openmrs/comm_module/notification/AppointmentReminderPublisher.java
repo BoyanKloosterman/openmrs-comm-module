@@ -2,6 +2,7 @@ package nl.openmrs.comm_module.notification;
 
 import nl.openmrs.comm_module.messaging.queue.RabbitMqProducer;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderSpec;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import nl.openmrs.comm_module.provider.MessagingProviderType;
 import org.slf4j.Logger;
@@ -9,8 +10,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
-/** Zet 24u-herinneringen op RabbitMQ (US-001-3); US-001-4 check vlak voor queue. */
+/** Zet herinneringen op RabbitMQ (US-001/002). */
 @Service
 public class AppointmentReminderPublisher {
 
@@ -32,32 +34,37 @@ public class AppointmentReminderPublisher {
         this.rabbitMqProducer = rabbitMqProducer;
     }
 
-    public int publish24HourReminders(List<PolledAppointmentEntity> appointments) {
-        return publish24HourReminders(appointments, null);
+    public int publishReminders(List<PolledAppointmentEntity> appointments, AppointmentReminderSpec spec) {
+        return publishReminders(appointments, spec, null);
     }
 
     /** Optionele provider voor test-GUI; null = default uit scheduler-config. */
-    public int publish24HourReminders(
-            List<PolledAppointmentEntity> appointments, MessagingProviderType providerOverride) {
+    public int publishReminders(
+            List<PolledAppointmentEntity> appointments,
+            AppointmentReminderSpec spec,
+            MessagingProviderType providerOverride) {
         int queued = 0;
         for (PolledAppointmentEntity appointment : appointments) {
-            if (!eligibilityService.maySend24HourReminder(appointment)) {
+            if (!eligibilityService.maySendReminder(appointment)) {
                 log.info(
-                        "24u-herinnering overgeslagen voor {}: afspraak al begonnen of geannuleerd",
+                        "{}-herinnering overgeslagen voor {}: afspraak al begonnen of geannuleerd",
+                        spec.logLabel(),
                         appointment.getAppointmentFhirId());
                 continue;
             }
-            if (deliveryLogService.hasSuccessfulDelivery(
-                    appointment.getAppointmentFhirId(), AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H)) {
+            if (deliveryLogService.hasSuccessfulDelivery(appointment.getAppointmentFhirId(), spec.messageType())) {
                 log.debug(
-                        "24u-herinnering overgeslagen voor {}: al eerder succesvol verstuurd",
+                        "{}-herinnering overgeslagen voor {}: al eerder succesvol verstuurd",
+                        spec.logLabel(),
                         appointment.getAppointmentFhirId());
                 continue;
             }
-            var messageOpt = messageBuilder.build24HourReminder(appointment);
+            Optional<NotificationQueueMessage> messageOpt =
+                    messageBuilder.buildReminder(appointment, spec);
             if (messageOpt.isEmpty()) {
                 log.warn(
-                        "Geen herinnering voor appointment {}: ontbrekend telefoonnummer",
+                        "Geen {}-herinnering voor appointment {}: ontbrekend telefoonnummer",
+                        spec.logLabel(),
                         appointment.getAppointmentFhirId());
                 continue;
             }
@@ -69,7 +76,8 @@ public class AppointmentReminderPublisher {
             deliveryLogService.recordQueued(message);
             queued++;
             log.info(
-                    "24u-herinnering in queue: notificationId={} appointment={} naar {}",
+                    "{}-herinnering in queue: notificationId={} appointment={} naar {}",
+                    spec.logLabel(),
                     message.getNotificationId(),
                     appointment.getAppointmentFhirId(),
                     message.getRecipient());

@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service;
 import java.time.Clock;
 import java.time.Instant;
 
-/** US-001-4: bepaalt of een 24u-herinnering nog verstuurd mag worden. */
+/** US-001-4 / US-002-3: geen herinnering als afspraak al begonnen of geannuleerd. */
 @Service
 public class AppointmentReminderEligibilityService {
 
@@ -16,11 +16,11 @@ public class AppointmentReminderEligibilityService {
         this.clock = clock;
     }
 
-    public boolean maySend24HourReminder(PolledAppointmentEntity appointment) {
-        return maySend24HourReminder(appointment, clock.instant());
+    public boolean maySendReminder(PolledAppointmentEntity appointment) {
+        return maySendReminder(appointment, clock.instant());
     }
 
-    public boolean maySend24HourReminder(PolledAppointmentEntity appointment, Instant now) {
+    public boolean maySendReminder(PolledAppointmentEntity appointment, Instant now) {
         if (appointment == null || appointment.isVoided()) {
             return false;
         }

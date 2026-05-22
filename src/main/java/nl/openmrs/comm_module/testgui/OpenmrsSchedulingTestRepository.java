@@ -9,7 +9,9 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.PreparedStatement;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -99,6 +101,67 @@ public class OpenmrsSchedulingTestRepository {
             WHERE retired = false AND trim(uuid) = ?
             """;
 
+    private static final String SELECT_APPOINTMENTS =
+            """
+            SELECT
+              a.appointment_id,
+              upper(trim(a.status)) AS status,
+              a.voided,
+              ts.start_date,
+              ts.end_date,
+              trim(coalesce(pn.given_name, '')) AS given_name,
+              trim(coalesce(pn.family_name, '')) AS family_name,
+              trim(per.uuid) AS patient_uuid,
+              trim(l.uuid) AS location_uuid,
+              trim(l.name) AS location_name,
+              trim(at.name) AS type_name,
+              trim(coalesce(a.reason, '')) AS reason
+            FROM appointmentscheduling_appointment a
+            JOIN patient p ON a.patient_id = p.patient_id
+            JOIN person per ON p.patient_id = per.person_id
+            JOIN person_name pn
+              ON per.person_id = pn.person_id AND pn.preferred = true AND pn.voided = false
+            JOIN appointmentscheduling_time_slot ts ON a.time_slot_id = ts.time_slot_id
+            JOIN appointmentscheduling_appointment_block ab
+              ON ts.appointment_block_id = ab.appointment_block_id
+            JOIN location l ON ab.location_id = l.location_id
+            JOIN appointmentscheduling_appointment_type at
+              ON a.appointment_type_id = at.appointment_type_id
+            WHERE (? = true OR a.voided = false)
+            ORDER BY ts.start_date DESC
+            LIMIT ?
+            """;
+
+    private static final String SELECT_APPOINTMENT_BY_ID =
+            """
+            SELECT
+              a.appointment_id,
+              upper(trim(a.status)) AS status,
+              a.voided,
+              ts.start_date,
+              ts.end_date,
+              trim(coalesce(pn.given_name, '')) AS given_name,
+              trim(coalesce(pn.family_name, '')) AS family_name,
+              trim(per.uuid) AS patient_uuid,
+              trim(l.uuid) AS location_uuid,
+              trim(l.name) AS location_name,
+              trim(at.name) AS type_name,
+              trim(coalesce(a.reason, '')) AS reason,
+              ab.location_id
+            FROM appointmentscheduling_appointment a
+            JOIN patient p ON a.patient_id = p.patient_id
+            JOIN person per ON p.patient_id = per.person_id
+            JOIN person_name pn
+              ON per.person_id = pn.person_id AND pn.preferred = true AND pn.voided = false
+            JOIN appointmentscheduling_time_slot ts ON a.time_slot_id = ts.time_slot_id
+            JOIN appointmentscheduling_appointment_block ab
+              ON ts.appointment_block_id = ab.appointment_block_id
+            JOIN location l ON ab.location_id = l.location_id
+            JOIN appointmentscheduling_appointment_type at
+              ON a.appointment_type_id = at.appointment_type_id
+            WHERE a.appointment_id = ?
+            """;
+
     private final JdbcTemplate jdbcTemplate;
 
     public OpenmrsSchedulingTestRepository(JdbcTemplate jdbcTemplate) {
@@ -170,6 +233,86 @@ public class OpenmrsSchedulingTestRepository {
                 location.name(),
                 start,
                 trimmedReason);
+    }
+
+    public List<OpenmrsAppointmentListRow> listAppointments(int limit, boolean includeVoided) {
+        return jdbcTemplate.query(
+                SELECT_APPOINTMENTS,
+                APPOINTMENT_LIST_ROW_MAPPER,
+                includeVoided,
+                Math.max(1, limit));
+    }
+
+    public Optional<OpenmrsAppointmentDetailRow> findAppointmentById(int openmrsAppointmentId) {
+        List<OpenmrsAppointmentDetailRow> rows =
+                jdbcTemplate.query(SELECT_APPOINTMENT_BY_ID, APPOINTMENT_DETAIL_ROW_MAPPER, openmrsAppointmentId);
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
+    public boolean updateAppointment(
+            int openmrsAppointmentId, String reason, String status, LocalDateTime start, String locationUuid) {
+        OpenmrsAppointmentDetailRow current =
+                findAppointmentById(openmrsAppointmentId)
+                        .orElseThrow(
+                                () ->
+                                        new IllegalArgumentException(
+                                                "Afspraak niet gevonden: " + openmrsAppointmentId));
+
+        int locationId = current.locationId();
+        LocalDateTime newStart = start != null ? start : current.start();
+        LocalDateTime newEnd = newStart.plusHours(1);
+
+        if (locationUuid != null && !locationUuid.isBlank()) {
+            locationId =
+                    findLocationByUuid(locationUuid)
+                            .orElseThrow(
+                                    () ->
+                                            new IllegalArgumentException(
+                                                    "Locatie niet gevonden: " + locationUuid))
+                            .locationId();
+        }
+
+        int timeSlotId = findOrCreateTimeSlot(locationId, newStart, newEnd);
+        String newStatus = status != null && !status.isBlank() ? status.trim().toUpperCase() : current.status();
+        String newReason = reason != null ? reason.trim() : current.reason();
+
+        int updated =
+                jdbcTemplate.update(
+                        """
+                        UPDATE appointmentscheduling_appointment
+                        SET time_slot_id = ?,
+                            status = ?,
+                            reason = ?,
+                            date_changed = NOW(),
+                            changed_by = ?
+                        WHERE appointment_id = ?
+                          AND voided = false
+                        """,
+                        timeSlotId,
+                        newStatus,
+                        newReason,
+                        CREATOR_USER_ID,
+                        openmrsAppointmentId);
+        return updated > 0;
+    }
+
+    public boolean voidAppointment(int openmrsAppointmentId) {
+        int updated =
+                jdbcTemplate.update(
+                        """
+                        UPDATE appointmentscheduling_appointment
+                        SET voided = true,
+                            voided_by = ?,
+                            date_voided = NOW(),
+                            date_changed = NOW(),
+                            changed_by = ?
+                        WHERE appointment_id = ?
+                          AND voided = false
+                        """,
+                        CREATOR_USER_ID,
+                        CREATOR_USER_ID,
+                        openmrsAppointmentId);
+        return updated > 0;
     }
 
     public boolean cancelAppointment(int openmrsAppointmentId) {
@@ -349,6 +492,49 @@ public class OpenmrsSchedulingTestRepository {
                             rs.getString("location_uuid"),
                             rs.getString("name"));
 
+    private static final RowMapper<OpenmrsAppointmentListRow> APPOINTMENT_LIST_ROW_MAPPER =
+            (rs, rowNum) ->
+                    new OpenmrsAppointmentListRow(
+                            rs.getInt("appointment_id"),
+                            rs.getString("status"),
+                            rs.getBoolean("voided"),
+                            rs.getTimestamp("start_date").toLocalDateTime(),
+                            rs.getTimestamp("end_date").toLocalDateTime(),
+                            displayName(rs.getString("given_name"), rs.getString("family_name")),
+                            rs.getString("patient_uuid"),
+                            rs.getString("location_uuid"),
+                            rs.getString("location_name"),
+                            rs.getString("type_name"),
+                            rs.getString("reason"));
+
+    private static final RowMapper<OpenmrsAppointmentDetailRow> APPOINTMENT_DETAIL_ROW_MAPPER =
+            (rs, rowNum) ->
+                    new OpenmrsAppointmentDetailRow(
+                            rs.getInt("appointment_id"),
+                            rs.getString("status"),
+                            rs.getBoolean("voided"),
+                            rs.getTimestamp("start_date").toLocalDateTime(),
+                            rs.getTimestamp("end_date").toLocalDateTime(),
+                            displayName(rs.getString("given_name"), rs.getString("family_name")),
+                            rs.getString("patient_uuid"),
+                            rs.getInt("location_id"),
+                            rs.getString("location_uuid"),
+                            rs.getString("location_name"),
+                            rs.getString("type_name"),
+                            rs.getString("reason"));
+
+    private static String displayName(String given, String family) {
+        String g = given == null ? "" : given.trim();
+        String f = family == null ? "" : family.trim();
+        if (!g.isEmpty() && !f.isEmpty()) {
+            return g + " " + f;
+        }
+        if (!f.isEmpty()) {
+            return f;
+        }
+        return g.isEmpty() ? "Onbekend" : g;
+    }
+
     private static final RowMapper<OpenmrsPatientRow> PATIENT_ROW_MAPPER =
             (rs, rowNum) ->
                     new OpenmrsPatientRow(
@@ -384,4 +570,49 @@ public class OpenmrsSchedulingTestRepository {
             String locationName,
             LocalDateTime start,
             String reason) {}
+
+    public record OpenmrsAppointmentListRow(
+            int appointmentId,
+            String status,
+            boolean voided,
+            LocalDateTime start,
+            LocalDateTime end,
+            String patientDisplayName,
+            String patientUuid,
+            String locationUuid,
+            String locationName,
+            String typeName,
+            String reason) {
+
+        public String fhirAppointmentId() {
+            return "omrs-appt-" + appointmentId;
+        }
+
+        public Instant startInstant() {
+            return start.atZone(ZoneOffset.UTC).toInstant();
+        }
+
+        public Instant endInstant() {
+            return end.atZone(ZoneOffset.UTC).toInstant();
+        }
+    }
+
+    public record OpenmrsAppointmentDetailRow(
+            int appointmentId,
+            String status,
+            boolean voided,
+            LocalDateTime start,
+            LocalDateTime end,
+            String patientDisplayName,
+            String patientUuid,
+            int locationId,
+            String locationUuid,
+            String locationName,
+            String typeName,
+            String reason) {
+
+        public String fhirAppointmentId() {
+            return "omrs-appt-" + appointmentId;
+        }
+    }
 }

@@ -3,6 +3,7 @@ package nl.openmrs.comm_module.poll.persistence;
 import nl.openmrs.comm_module.messaging.fhir.dto.AppointmentPollDto;
 import nl.openmrs.comm_module.messaging.fhir.dto.AppointmentWithPatientDto;
 import nl.openmrs.comm_module.messaging.fhir.dto.PatientPollDto;
+import nl.openmrs.comm_module.notification.voided.VoidedAppointmentCoordinator;
 import nl.openmrs.comm_module.poll.AppointmentPollPersistence;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,12 +16,15 @@ public class JpaAppointmentPollPersistence implements AppointmentPollPersistence
 
     private final PolledAppointmentRepository repository;
     private final PolledAppointmentExclusionRepository exclusionRepository;
+    private final VoidedAppointmentCoordinator voidedAppointmentCoordinator;
 
     public JpaAppointmentPollPersistence(
             PolledAppointmentRepository repository,
-            PolledAppointmentExclusionRepository exclusionRepository) {
+            PolledAppointmentExclusionRepository exclusionRepository,
+            VoidedAppointmentCoordinator voidedAppointmentCoordinator) {
         this.repository = repository;
         this.exclusionRepository = exclusionRepository;
+        this.voidedAppointmentCoordinator = voidedAppointmentCoordinator;
     }
 
     @Override
@@ -36,8 +40,10 @@ public class JpaAppointmentPollPersistence implements AppointmentPollPersistence
             PolledAppointmentEntity entity = repository
                     .findByOrganisationIdAndAppointmentFhirId(organisationId, a.appointmentId())
                     .orElseGet(PolledAppointmentEntity::new);
+            boolean wasVoidedBefore = entity.getId() != null && entity.isVoided();
             applyAppointment(entity, organisationId, a, row.patient(), now);
             repository.save(entity);
+            voidedAppointmentCoordinator.notifyIfVoided(entity, wasVoidedBefore);
         }
     }
 

@@ -2,6 +2,7 @@ package nl.openmrs.comm_module.notification;
 
 import nl.openmrs.comm_module.messaging.queue.RabbitMqProducer;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderTestSpecs;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,6 +16,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,13 +46,17 @@ class AppointmentReminderPublisherTest {
         NotificationQueueMessage msg = new NotificationQueueMessage();
         msg.setNotificationId(java.util.UUID.randomUUID());
 
-        when(eligibilityService.maySend24HourReminder(withPhone)).thenReturn(true);
-        when(eligibilityService.maySend24HourReminder(noPhone)).thenReturn(true);
+        when(eligibilityService.maySendReminder(withPhone)).thenReturn(true);
+        when(eligibilityService.maySendReminder(noPhone)).thenReturn(true);
         when(deliveryLogService.hasSuccessfulDelivery(any(), any())).thenReturn(false);
-        when(messageBuilder.build24HourReminder(withPhone)).thenReturn(Optional.of(msg));
-        when(messageBuilder.build24HourReminder(noPhone)).thenReturn(Optional.empty());
+        when(messageBuilder.buildReminder(withPhone, AppointmentReminderTestSpecs.HOURS_24))
+                .thenReturn(Optional.of(msg));
+        when(messageBuilder.buildReminder(noPhone, AppointmentReminderTestSpecs.HOURS_24))
+                .thenReturn(Optional.empty());
 
-        int queued = publisher.publish24HourReminders(List.of(withPhone, noPhone));
+        int queued =
+                publisher.publishReminders(
+                        List.of(withPhone, noPhone), AppointmentReminderTestSpecs.HOURS_24);
 
         assertEquals(1, queued);
         verify(rabbitMqProducer).publish(msg);
@@ -60,11 +66,13 @@ class AppointmentReminderPublisherTest {
     @Test
     void slaatBegonnenAfspraakOver() {
         PolledAppointmentEntity started = appointment("apt-started");
-        when(eligibilityService.maySend24HourReminder(started)).thenReturn(false);
+        when(eligibilityService.maySendReminder(started)).thenReturn(false);
 
-        assertEquals(0, publisher.publish24HourReminders(List.of(started)));
+        assertEquals(
+                0,
+                publisher.publishReminders(List.of(started), AppointmentReminderTestSpecs.HOURS_24));
 
-        verify(messageBuilder, never()).build24HourReminder(any());
+        verify(messageBuilder, never()).buildReminder(any(), any());
         verify(rabbitMqProducer, never()).publish(any());
         verify(deliveryLogService, never()).recordQueued(any());
     }
@@ -72,20 +80,42 @@ class AppointmentReminderPublisherTest {
     @Test
     void slaatOverBijEerderSuccesvolVerstuurd() {
         PolledAppointmentEntity apt = appointment("apt-done");
-        when(eligibilityService.maySend24HourReminder(apt)).thenReturn(true);
-        when(deliveryLogService.hasSuccessfulDelivery("apt-done", AppointmentReminderMessageBuilder.MESSAGE_TYPE_24H))
+        when(eligibilityService.maySendReminder(apt)).thenReturn(true);
+        when(deliveryLogService.hasSuccessfulDelivery(
+                        "apt-done", AppointmentReminderTestSpecs.HOURS_24.messageType()))
                 .thenReturn(true);
 
-        assertEquals(0, publisher.publish24HourReminders(List.of(apt)));
+        assertEquals(
+                0,
+                publisher.publishReminders(List.of(apt), AppointmentReminderTestSpecs.HOURS_24));
 
-        verify(messageBuilder, never()).build24HourReminder(any());
+        verify(messageBuilder, never()).buildReminder(any(), any());
         verify(rabbitMqProducer, never()).publish(any());
     }
 
     @Test
     void publiceertNietsBijLegeLijst() {
-        assertEquals(0, publisher.publish24HourReminders(List.of()));
+        assertEquals(
+                0,
+                publisher.publishReminders(List.of(), AppointmentReminderTestSpecs.HOURS_24));
         verify(rabbitMqProducer, never()).publish(any());
+    }
+
+    @Test
+    void publiceert1uOokAls24uAlVerstuurd() {
+        PolledAppointmentEntity apt = appointment("apt-1h");
+        NotificationQueueMessage msg = new NotificationQueueMessage();
+        msg.setNotificationId(java.util.UUID.randomUUID());
+
+        when(eligibilityService.maySendReminder(apt)).thenReturn(true);
+        when(deliveryLogService.hasSuccessfulDelivery(
+                        "apt-1h", AppointmentReminderTestSpecs.HOURS_1.messageType()))
+                .thenReturn(false);
+        when(messageBuilder.buildReminder(apt, AppointmentReminderTestSpecs.HOURS_1))
+                .thenReturn(Optional.of(msg));
+
+        assertEquals(1, publisher.publishReminders(List.of(apt), AppointmentReminderTestSpecs.HOURS_1));
+        verify(rabbitMqProducer).publish(msg);
     }
 
     private static PolledAppointmentEntity appointment(String fhirId) {

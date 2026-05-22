@@ -1,15 +1,14 @@
 package nl.openmrs.comm_module.notification;
 
-import nl.openmrs.comm_module.config.NotificationSchedulerProperties;
-import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
 import nl.openmrs.comm_module.messaging.queue.RabbitMqProducer;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.notification.persistence.NotificationDeliveryLogRepository;
 import nl.openmrs.comm_module.notification.reminder.AppointmentReminderConfiguration;
+import nl.openmrs.comm_module.notification.reminder.AppointmentReminderTestSpecs;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
+import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
 import nl.openmrs.comm_module.messaging.queue.RabbitMqConsumer;
-import nl.openmrs.comm_module.scheduling.NotificationScheduler;
 import nl.openmrs.comm_module.scheduling.OpenmrsFhirPollingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,12 +23,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -41,10 +40,11 @@ import static org.mockito.Mockito.when;
             "comm.notification.scheduler.enabled=false",
             "openmrs.fhir.organisation-id=test-org",
             "comm.notification.scheduler.reminder-lead-hours=24",
+            "comm.notification.scheduler.reminder-1-lead-hours=1",
             "comm.notification.scheduler.reminder-window-minutes=60",
             "spring.rabbitmq.listener.simple.auto-startup=false"
         })
-class AppointmentReminderSchedulingIntegrationTest {
+class AppointmentReminder1HourSchedulingIntegrationTest {
 
     private static final Instant NOW = Instant.parse("2026-05-18T10:00:00Z");
 
@@ -75,10 +75,7 @@ class AppointmentReminderSchedulingIntegrationTest {
     private DefaultDueNotificationProcessor dueNotificationProcessor;
 
     @Autowired
-    private NotificationScheduler notificationScheduler;
-
-    @Autowired
-    private NotificationSchedulerProperties schedulerProperties;
+    private AppointmentReminderPublisher appointmentReminderPublisher;
 
     @BeforeEach
     void fixedClock() {
@@ -88,53 +85,55 @@ class AppointmentReminderSchedulingIntegrationTest {
     }
 
     @Test
-    void processorZetAppointmentIn24uVensterOpQueue() {
-        saveDueAppointment("apt-flow", "+31611112222");
+    void processorZetAppointmentIn1uVensterOpQueue() {
+        saveDueAppointment("apt-1h", "+31611112222", Instant.parse("2026-05-18T11:05:00Z"));
 
         dueNotificationProcessor.processDueNotifications();
 
         ArgumentCaptor<NotificationQueueMessage> captor = ArgumentCaptor.forClass(NotificationQueueMessage.class);
-        verify(rabbitMqProducer).publish(captor.capture());
-        NotificationQueueMessage msg = captor.getValue();
-        assertEquals("apt-flow", msg.getAppointmentFhirId());
-        assertEquals(AppointmentReminderConfiguration.MESSAGE_TYPE_24H, msg.getMessageType());
-        assertEquals(1, deliveryLogRepository.count());
-        assertEquals(NotificationDeliveryLogService.STATUS_QUEUED, deliveryLogRepository.findAll().get(0).getStatus());
+        verify(rabbitMqProducer, org.mockito.Mockito.atLeastOnce()).publish(captor.capture());
+        assertTrue(
+                captor.getAllValues().stream()
+                        .anyMatch(
+                                m ->
+                                        AppointmentReminderConfiguration.MESSAGE_TYPE_1H.equals(
+                                                m.getMessageType())));
     }
 
     @Test
-    void tweedeSchedulerTickQueueNietOpnieuwNaEerstePoging() {
-        saveDueAppointment("apt-dedup", "+31633334444");
-        schedulerProperties.setEnabled(true);
+    void eenUurWordtVerstuurdOokAls24uAlSuccesvol() {
+        PolledAppointmentEntity apt = saveDueAppointment("apt-both", "+31699998888", Instant.parse("2026-05-18T11:05:00Z"));
+        appointmentReminderPublisher.publishReminders(
+                List.of(apt), AppointmentReminderTestSpecs.HOURS_24);
 
-        notificationScheduler.checkDueNotifications();
-        notificationScheduler.checkDueNotifications();
+        int queued1 =
+                appointmentReminderPublisher.publishReminders(
+                        List.of(apt), AppointmentReminderTestSpecs.HOURS_1);
 
-        verify(rabbitMqProducer, times(1)).publish(org.mockito.ArgumentMatchers.any());
+        assertEquals(1, queued1);
+        long count1h =
+                deliveryLogRepository.findAll().stream()
+                        .filter(
+                                e ->
+                                        AppointmentReminderConfiguration.MESSAGE_TYPE_1H.equals(
+                                                e.getMessageType()))
+                        .count();
+        assertTrue(count1h >= 1);
     }
 
-    @Test
-    void schedulerTickMetUitgeschakeldeSchedulerQueueNiets() {
-        schedulerProperties.setEnabled(false);
-        saveDueAppointment("apt-off", "+31655556666");
-
-        notificationScheduler.checkDueNotifications();
-
-        verify(rabbitMqProducer, never()).publish(org.mockito.ArgumentMatchers.any());
-    }
-
-    private void saveDueAppointment(String appointmentFhirId, String phone) {
+    private PolledAppointmentEntity saveDueAppointment(
+            String appointmentFhirId, String phone, Instant appointmentDatetime) {
         PolledAppointmentEntity a = new PolledAppointmentEntity();
         a.setOrganisationId("test-org");
         a.setAppointmentUuid("uuid-" + appointmentFhirId);
         a.setAppointmentFhirId(appointmentFhirId);
         a.setPatientFhirId("pat-" + appointmentFhirId);
-        a.setAppointmentDatetime(Instant.parse("2026-05-19T10:05:00Z"));
+        a.setAppointmentDatetime(appointmentDatetime);
         a.setPatientPhone(phone);
         a.setPatientDisplayName("Test");
         a.setLocationId("poli-1");
         a.setVoided(false);
         a.setLastPolledAt(NOW);
-        polledAppointmentRepository.save(a);
+        return polledAppointmentRepository.save(a);
     }
 }

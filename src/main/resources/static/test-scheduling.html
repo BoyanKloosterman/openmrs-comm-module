@@ -148,27 +148,51 @@
     .toast.err { border-color: var(--err); }
     .empty { color: var(--muted); font-size: 0.85rem; }
     .auto label { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
+    .edit-grid {
+      display: grid;
+      gap: 0.75rem;
+    }
+    @media (min-width: 700px) {
+      .edit-grid { grid-template-columns: 1fr 1fr; }
+    }
+    input[type="datetime-local"] {
+      width: 100%;
+      padding: 0.5rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      margin-bottom: 0.6rem;
+    }
+    tr.voided-row td { opacity: 0.65; }
   </style>
 </head>
 <body>
   <header>
     <h1>Scheduling &amp; messaging — testconsole</h1>
-    <p>Alleen voor ontwikkeling. Boekt in <strong>OpenMRS</strong> (bestaande patiënt) op <strong>nu + lead-uren + 5 min</strong>, sync → FHIR → poll, en toont venster/queue/bericht met OpenMRS-reden.</p>
+    <p>Alleen voor ontwikkeling. Test <strong>24u-</strong> en <strong>1u-herinneringen</strong> (US-001/002): boek op nu + lead + 5 min, sync → FHIR → poll, scheduler en berichtpreview.</p>
   </header>
   <main>
     <div class="grid grid-2" style="margin-bottom: 1rem;">
       <section class="card">
         <h2>Scheduler-configuratie</h2>
+        <label for="reminder-mode">Herinnering testen</label>
+        <select id="reminder-mode">
+          <option value="24h">24 uur (US-001)</option>
+          <option value="1h" selected>1 uur (US-002)</option>
+        </select>
         <dl class="status-grid" id="status-grid"></dl>
         <div class="window-bar" title="Herinneringsvenster (UTC)"><div class="window-fill" id="window-fill" style="width:0%"></div></div>
         <p class="empty" id="window-desc"></p>
+        <p class="empty" id="window-desc-alt" hidden></p>
         <label for="provider-select">Messaging provider (queue)</label>
         <select id="provider-select"><option value="">— laden… —</option></select>
         <p class="empty" style="margin-top: 0.35rem;">Provider wordt per afspraak opgeslagen (bij boeken of bij wijziging hier). <em>Scheduler nu</em> = alle in venster; <em>Verstuur geselecteerde</em> = één rij. Achtergrond-scheduler = altijd default.</p>
         <div class="btn-row">
           <button type="button" class="btn-secondary" id="btn-refresh">Vernieuwen</button>
           <button type="button" class="btn-secondary" id="btn-poll">Poll nu</button>
-          <button type="button" class="btn-secondary" id="btn-scheduler">Scheduler nu (alle)</button>
+          <button type="button" class="btn-secondary" id="btn-scheduler">Scheduler nu (modus)</button>
+          <button type="button" class="btn-secondary" id="btn-scheduler-all">Scheduler 24u+1u</button>
           <button type="button" class="btn-secondary" id="btn-scheduler-one" disabled>Verstuur geselecteerde</button>
         </div>
         <div class="auto" style="margin-top: 0.75rem;">
@@ -186,7 +210,8 @@
         <label><input type="checkbox" id="run-sync" checked> Direct daarna OpenMRS→FHIR sync</label>
         <label><input type="checkbox" id="run-poll" checked> Direct daarna FHIR-pollen</label>
         <div class="btn-row">
-          <button type="button" class="btn-primary" id="btn-create">Afspraak in herinneringsvenster</button>
+          <button type="button" class="btn-primary" id="btn-create">Afspraak in gekozen venster</button>
+          <button type="button" class="btn-secondary" id="btn-create-1h">Afspraak in 1u-venster</button>
         </div>
         <p class="empty" id="create-result"></p>
       </section>
@@ -202,8 +227,10 @@
                 <th>FHIR id</th>
                 <th>Afspraak (UTC)</th>
                 <th>Provider</th>
-                <th>Status</th>
-                <th>Verstuurd</th>
+                <th>24u</th>
+                <th>1u</th>
+                <th>24u verz.</th>
+                <th>1u verz.</th>
               </tr>
             </thead>
             <tbody id="appointments-body"></tbody>
@@ -212,7 +239,7 @@
         <p class="empty" id="appointments-empty">Geen rijen — maak een testafspraak of wacht op poll.</p>
       </section>
       <section class="card">
-        <h2>Bericht (24u-herinnering)</h2>
+        <h2 id="message-title">Bericht (1u-herinnering)</h2>
         <div class="message-meta" id="message-meta">Selecteer een afspraak in de tabel.</div>
         <div class="message-box" id="message-body">—</div>
         <div class="btn-row">
@@ -222,6 +249,60 @@
         </div>
       </section>
     </div>
+
+    <section class="card" style="margin-top: 1rem;">
+      <h2>OpenMRS afspraken (bron)</h2>
+      <p class="empty" style="margin: 0 0 0.75rem;">Alle afspraken uit <code>appointmentscheduling_appointment</code> — bewerken of verwijderen (voided). Na wijziging optioneel sync → FHIR → poll.</p>
+      <div class="auto" style="margin-bottom: 0.75rem;">
+        <label><input type="checkbox" id="openmrs-include-voided"> Toon verwijderde (voided)</label>
+        <button type="button" class="btn-secondary" id="btn-openmrs-refresh" style="margin-left: 0.5rem;">Lijst vernieuwen</button>
+      </div>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>FHIR id</th>
+              <th>Start (UTC)</th>
+              <th>Patiënt</th>
+              <th>Locatie</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="openmrs-body"></tbody>
+        </table>
+      </div>
+      <p class="empty" id="openmrs-empty">Geen afspraken in OpenMRS.</p>
+      <div class="edit-grid" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+        <div>
+          <h2 style="margin-top: 0;">Bewerken</h2>
+          <p class="empty" id="openmrs-edit-hint">Selecteer een rij in de tabel.</p>
+          <div id="openmrs-edit-form" hidden>
+            <label for="omrs-edit-start">Start (UTC, datetime-local)</label>
+            <input type="datetime-local" id="omrs-edit-start">
+            <label for="omrs-edit-location">Locatie</label>
+            <select id="omrs-edit-location"></select>
+            <label for="omrs-edit-status">Status</label>
+            <select id="omrs-edit-status">
+              <option value="SCHEDULED">SCHEDULED</option>
+              <option value="CANCELLED">CANCELLED</option>
+              <option value="MISSED">MISSED</option>
+            </select>
+            <label for="omrs-edit-reason">Reden</label>
+            <textarea id="omrs-edit-reason" rows="2"></textarea>
+            <label><input type="checkbox" id="omrs-mutate-sync" checked> Sync + poll na opslaan/verwijderen</label>
+          </div>
+        </div>
+        <div>
+          <p class="message-meta" id="omrs-edit-meta"></p>
+          <div class="btn-row">
+            <button type="button" class="btn-primary" id="btn-omrs-save" disabled>Opslaan in OpenMRS</button>
+            <button type="button" class="btn-danger" id="btn-omrs-delete" disabled>Verwijderen (voided)</button>
+            <button type="button" class="btn-secondary" id="btn-omrs-cancel-appt" disabled>Annuleer (status)</button>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <section class="card" style="margin-top: 1rem;">
       <h2>Delivery log</h2>
@@ -248,8 +329,26 @@
     const API = '/api/test/scheduling';
     let selectedId = null;
     let selectedCancellable = false;
+    let selectedOpenmrsId = null;
     let refreshTimer = null;
     let defaultProvider = 'SWIFTSEND';
+    let lastStatus = null;
+    let lastAppointments = [];
+    let lastOpenmrsAppointments = [];
+    let lastLocations = [];
+
+    function getReminderMode() {
+      return document.getElementById('reminder-mode').value;
+    }
+
+    function apiQuery(reminderOverride) {
+      const parts = [];
+      const p = getSelectedProvider();
+      if (p) parts.push('provider=' + encodeURIComponent(p));
+      const rem = reminderOverride != null ? reminderOverride : getReminderMode();
+      if (rem) parts.push('reminder=' + encodeURIComponent(rem));
+      return parts.length ? '?' + parts.join('&') : '';
+    }
 
     function getSelectedProvider() {
       return document.getElementById('provider-select').value || defaultProvider;
@@ -320,13 +419,19 @@
     }
 
     function renderStatus(s) {
-      const w = s.reminderWindow;
+      lastStatus = s;
+      const mode = getReminderMode();
+      const w = mode === '1h' ? s.oneHourReminderWindow : s.reminderWindow;
+      const inWindowCount = mode === '1h' ? s.appointmentsCurrentlyIn1hWindow : s.appointmentsCurrentlyInWindow;
       const items = [
         ['Servertijd (UTC)', fmtInstant(s.serverTime)],
         ['Organisatie', s.organisationId],
-        ['Lead (uren)', s.reminderLeadHours],
+        ['Lead 24u (uren)', s.reminderLeadHours],
+        ['Lead 1u (uren)', s.reminder1LeadHours],
         ['Venster (min)', s.reminderWindowMinutes],
-        ['In venster nu', s.appointmentsCurrentlyInWindow],
+        ['In venster (' + mode + ')', inWindowCount],
+        ['In venster 24u', s.appointmentsCurrentlyInWindow],
+        ['In venster 1u', s.appointmentsCurrentlyIn1hWindow],
         ['Scheduler', s.schedulerEnabled ? 'aan' : 'uit'],
         ['Check-interval', s.schedulerCheckIntervalMinutes + ' min'],
         ['FHIR-poll', s.fhirPollIntervalMinutes + ' min'],
@@ -335,15 +440,21 @@
       ];
       document.getElementById('status-grid').innerHTML = items
         .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
-      document.getElementById('window-desc').textContent =
-        `Venster UTC: ${fmtInstant(w.windowStart)} t/m ${fmtInstant(w.windowEnd)} ` +
-        `(doel: ${fmtInstant(w.target)}, lead ${w.leadHours}u, breedte ${w.windowMinutes} min)`;
+      const desc = (win, label) =>
+        `${label} UTC: ${fmtInstant(win.windowStart)} t/m ${fmtInstant(win.windowEnd)} ` +
+        `(doel: ${fmtInstant(win.target)}, lead ${win.leadHours}u, breedte ${win.windowMinutes} min)`;
+      document.getElementById('window-desc').textContent = desc(w, 'Actief venster');
+      document.getElementById('window-desc-alt').hidden = false;
+      document.getElementById('window-desc-alt').textContent =
+        '24u: ' + desc(s.reminderWindow, '') + ' | 1u: ' + desc(s.oneHourReminderWindow, '');
       const now = new Date(s.serverTime).getTime();
       const start = new Date(w.windowStart).getTime();
       const end = new Date(w.windowEnd).getTime();
       const span = end - start;
       const pct = span > 0 ? Math.min(100, Math.max(0, ((now - start) / span) * 100)) : 0;
       document.getElementById('window-fill').style.width = pct + '%';
+      document.getElementById('message-title').textContent =
+        mode === '1h' ? 'Bericht (1u-herinnering)' : 'Bericht (24u-herinnering)';
     }
 
     function badgeFor(status, sent) {
@@ -378,7 +489,9 @@
           <td>${fmtInstant(r.appointmentDatetime)}</td>
           <td>${formatProviderCell(r)}</td>
           <td>${badgeFor(r.windowStatus, r.alreadySentSuccessfully)}</td>
+          <td>${badgeFor(r.oneHourWindowStatus, r.alreadySentOneHourSuccessfully)}</td>
           <td>${r.alreadySentSuccessfully ? 'ja' : 'nee'}</td>
+          <td>${r.alreadySentOneHourSuccessfully ? 'ja' : 'nee'}</td>
         </tr>`;
       }).join('');
       body.querySelectorAll('tr').forEach(tr => {
@@ -431,8 +544,15 @@
       if (row?.testMessagingProvider) {
         sel.value = row.testMessagingProvider;
       }
+      lastAppointments = rows;
       renderAppointments(rows);
-      renderMessage(row, row?.messagePreview);
+      renderMessageForMode(row);
+    }
+
+    function renderMessageForMode(row) {
+      const mode = getReminderMode();
+      const preview = mode === '1h' ? row?.oneHourMessagePreview : row?.messagePreview;
+      renderMessage(row, preview);
     }
 
     async function loadPatients() {
@@ -454,21 +574,122 @@
       }
     }
 
+    function locationOptionsHtml(locations, selectedUuid) {
+      return locations.map(l => {
+        const sel = l.locationUuid === selectedUuid ? ' selected' : '';
+        return `<option value="${l.locationUuid}"${sel}>${escapeHtml(l.name)}</option>`;
+      }).join('');
+    }
+
     async function loadLocations() {
       const sel = document.getElementById('location-select');
+      const editLoc = document.getElementById('omrs-edit-location');
       try {
         const locations = await api('/locations');
+        lastLocations = locations;
         if (!locations.length) {
           sel.innerHTML = '<option value="">Geen locaties in OpenMRS</option>';
+          editLoc.innerHTML = '<option value="">Geen locaties</option>';
           return;
         }
-        sel.innerHTML = '<option value="">— kies locatie —</option>' +
-          locations.map(l =>
-            `<option value="${l.locationUuid}">${escapeHtml(l.name)}</option>`
-          ).join('');
+        sel.innerHTML = '<option value="">— kies locatie —</option>' + locationOptionsHtml(locations, null);
+        editLoc.innerHTML = locationOptionsHtml(locations, null);
       } catch (e) {
         sel.innerHTML = '<option value="">Laden mislukt</option>';
         showToast('Locaties: ' + e.message, true);
+      }
+    }
+
+    function toDatetimeLocalValue(iso) {
+      if (!iso) return '';
+      return iso.replace(/\.\d{3}Z$/, 'Z').replace('Z', '').slice(0, 16);
+    }
+
+    function fromDatetimeLocalValue(value) {
+      if (!value) return null;
+      return value.length === 16 ? value + ':00.000Z' : value;
+    }
+
+    function openmrsStatusBadge(row) {
+      if (row.voided) return '<span class="badge badge-void">voided</span>';
+      if (row.status === 'CANCELLED' || row.status === 'MISSED') {
+        return `<span class="badge badge-void">${escapeHtml(row.status)}</span>`;
+      }
+      return `<span class="badge badge-in">${escapeHtml(row.status || '—')}</span>`;
+    }
+
+    function renderOpenmrsAppointments(rows) {
+      const body = document.getElementById('openmrs-body');
+      const empty = document.getElementById('openmrs-empty');
+      if (!rows.length) {
+        body.innerHTML = '';
+        empty.hidden = false;
+        return;
+      }
+      empty.hidden = true;
+      body.innerHTML = rows.map(r => {
+        const cls = [];
+        if (r.voided) cls.push('voided-row');
+        if (r.openmrsAppointmentId === selectedOpenmrsId) cls.push('selected');
+        const classAttr = cls.length ? ` class="${cls.join(' ')}"` : '';
+        return `<tr data-omrs-id="${r.openmrsAppointmentId}" data-fhir-id="${r.appointmentFhirId}"${classAttr}>
+          <td>${r.openmrsAppointmentId}</td>
+          <td><code>${r.appointmentFhirId}</code></td>
+          <td>${fmtInstant(r.appointmentStart)}</td>
+          <td>${escapeHtml(r.patientDisplayName)}</td>
+          <td>${escapeHtml(r.locationName || '—')}</td>
+          <td>${openmrsStatusBadge(r)}</td>
+        </tr>`;
+      }).join('');
+      body.querySelectorAll('tr').forEach(tr => {
+        tr.addEventListener('click', () => selectOpenmrsAppointment(Number(tr.dataset.omrsId), rows));
+      });
+    }
+
+    function selectOpenmrsAppointment(omrsId, rows) {
+      selectedOpenmrsId = omrsId;
+      const row = rows.find(r => r.openmrsAppointmentId === omrsId);
+      renderOpenmrsAppointments(rows);
+      const hint = document.getElementById('openmrs-edit-hint');
+      const form = document.getElementById('openmrs-edit-form');
+      const canEdit = row && !row.voided;
+      document.getElementById('btn-omrs-save').disabled = !canEdit;
+      document.getElementById('btn-omrs-delete').disabled = !canEdit;
+      document.getElementById('btn-omrs-cancel-appt').disabled = !canEdit || row.status === 'CANCELLED';
+      if (!row) {
+        hint.hidden = false;
+        form.hidden = true;
+        return;
+      }
+      hint.hidden = true;
+      form.hidden = false;
+      selectedId = row.appointmentFhirId;
+      document.getElementById('omrs-edit-start').value = toDatetimeLocalValue(row.appointmentStart);
+      document.getElementById('omrs-edit-status').value = row.status || 'SCHEDULED';
+      document.getElementById('omrs-edit-reason').value = row.reason || '';
+      document.getElementById('omrs-edit-location').innerHTML = locationOptionsHtml(lastLocations, row.locationUuid);
+      document.getElementById('omrs-edit-meta').innerHTML =
+        `<strong>#${row.openmrsAppointmentId}</strong> · ${escapeHtml(row.patientDisplayName)}<br>` +
+        `Type: ${escapeHtml(row.appointmentType || '—')} · FHIR: <code>${row.appointmentFhirId}</code>`;
+      if (lastAppointments.length) {
+        const polled = lastAppointments.find(a => a.appointmentFhirId === row.appointmentFhirId);
+        if (polled) selectAppointment(row.appointmentFhirId, lastAppointments);
+      }
+    }
+
+    async function loadOpenmrsAppointments() {
+      const includeVoided = document.getElementById('openmrs-include-voided').checked;
+      const rows = await api('/openmrs-appointments?includeVoided=' + includeVoided);
+      lastOpenmrsAppointments = rows;
+      renderOpenmrsAppointments(rows);
+      if (selectedOpenmrsId) {
+        const row = rows.find(r => r.openmrsAppointmentId === selectedOpenmrsId);
+        if (row) selectOpenmrsAppointment(selectedOpenmrsId, rows);
+        else {
+          selectedOpenmrsId = null;
+          document.getElementById('openmrs-edit-form').hidden = true;
+          document.getElementById('openmrs-edit-hint').hidden = false;
+        }
       }
     }
 
@@ -497,8 +718,10 @@
           api('/appointments'),
           api('/delivery-logs')
         ]);
+        await loadOpenmrsAppointments();
         renderStatus(status);
         populateProviderSelect(status);
+        lastAppointments = appointments;
         renderAppointments(appointments);
         if (selectedId) {
           const row = appointments.find(a => a.appointmentFhirId === selectedId);
@@ -509,7 +732,7 @@
           if (row?.testMessagingProvider) {
             document.getElementById('provider-select').value = row.testMessagingProvider;
           }
-          renderMessage(row, row?.messagePreview);
+          renderMessageForMode(row);
         }
         renderLogs(logs);
       } catch (e) {
@@ -527,7 +750,14 @@
     });
     document.getElementById('btn-scheduler').addEventListener('click', async () => {
       try {
-        const r = await api('/scheduler' + providerQuery(), { method: 'POST' });
+        const r = await api('/scheduler' + apiQuery(), { method: 'POST' });
+        showToast(`${r.message} — ${r.queued} bericht(en)`, !r.success);
+        await loadAll();
+      } catch (e) { showToast(e.message, true); }
+    });
+    document.getElementById('btn-scheduler-all').addEventListener('click', async () => {
+      try {
+        const r = await api('/scheduler' + apiQuery('all'), { method: 'POST' });
         showToast(`${r.message} — ${r.queued} bericht(en)`, !r.success);
         await loadAll();
       } catch (e) { showToast(e.message, true); }
@@ -537,14 +767,25 @@
       try {
         await saveProviderForSelected();
         const r = await api(
-          '/appointments/' + encodeURIComponent(selectedId) + '/scheduler' + providerQuery(),
+          '/appointments/' + encodeURIComponent(selectedId) + '/scheduler' + apiQuery(),
           { method: 'POST' }
         );
         showToast(`${r.message} — ${r.provider}`, !r.success);
         await loadAll();
       } catch (e) { showToast(e.message, true); }
     });
-    document.getElementById('btn-create').addEventListener('click', async () => {
+    function buildAppointmentBody(leadHours) {
+      return {
+        patientUuid: document.getElementById('patient-select').value,
+        locationUuid: document.getElementById('location-select').value,
+        reason: document.getElementById('reason').value,
+        runSyncAfter: document.getElementById('run-sync').checked,
+        runPollAfter: document.getElementById('run-poll').checked,
+        leadHours: leadHours
+      };
+    }
+
+    async function createAppointmentWithLead(leadHours, label) {
       const patientUuid = document.getElementById('patient-select').value;
       const locationUuid = document.getElementById('location-select').value;
       if (!patientUuid) {
@@ -555,31 +796,39 @@
         showToast('Kies eerst een locatie uit OpenMRS', true);
         return;
       }
-      const body = {
-        patientUuid,
-        locationUuid,
-        reason: document.getElementById('reason').value,
-        runSyncAfter: document.getElementById('run-sync').checked,
-        runPollAfter: document.getElementById('run-poll').checked
-      };
       try {
         const r = await api('/appointments' + providerQuery(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
+          body: JSON.stringify(buildAppointmentBody(leadHours))
         });
         document.getElementById('create-result').textContent =
           `OpenMRS #${r.openmrsAppointmentId} → ${r.appointmentFhirId} om ${fmtInstant(r.appointmentStart)} ` +
-          `(${r.locationName || 'locatie onbekend'}). ${r.syncNote || ''} ${r.pollNote || ''}`.trim();
+          `(${r.locationName || 'locatie onbekend'}, lead ${leadHours}u). ${r.syncNote || ''} ${r.pollNote || ''}`.trim();
         selectedId = r.appointmentFhirId;
-        showToast('Afspraak geboekt (' + getSelectedProvider() + ')', false);
+        showToast(label + ' (' + getSelectedProvider() + ')', false);
         await loadAll();
         if (r.polledRow) {
           const row = r.polledRow;
           document.getElementById('provider-select').value = row.testMessagingProvider || getSelectedProvider();
-          renderMessage(row, row.messagePreview);
+          renderMessageForMode(row);
         }
       } catch (e) { showToast(e.message, true); }
+    }
+
+    document.getElementById('btn-create').addEventListener('click', async () => {
+      const lead = getReminderMode() === '1h' ? 1 : 24;
+      await createAppointmentWithLead(lead, 'Afspraak geboekt');
+    });
+    document.getElementById('btn-create-1h').addEventListener('click', async () => {
+      document.getElementById('reminder-mode').value = '1h';
+      if (lastStatus) renderStatus(lastStatus);
+      await createAppointmentWithLead(1, '1u-afspraak geboekt');
+    });
+    document.getElementById('reminder-mode').addEventListener('change', () => {
+      if (lastStatus) renderStatus(lastStatus);
+      const row = lastAppointments.find(a => a.appointmentFhirId === selectedId);
+      if (row) renderMessageForMode(row);
     });
     document.getElementById('btn-cancel').addEventListener('click', async () => {
       if (!selectedId || !confirm('Afspraak ' + selectedId + ' annuleren in OpenMRS?')) return;
@@ -617,8 +866,50 @@
         const appointments = await api('/appointments');
         renderAppointments(appointments);
         selectAppointment(selectedId, appointments);
-        if (updated?.messagePreview) renderMessage(updated, updated.messagePreview);
+        if (updated) renderMessageForMode(updated);
       } catch (e) { showToast(e.message, true); }
+    });
+    document.getElementById('openmrs-include-voided').addEventListener('change', () => {
+      loadOpenmrsAppointments().catch(e => showToast(e.message, true));
+    });
+    document.getElementById('btn-openmrs-refresh').addEventListener('click', () => {
+      loadOpenmrsAppointments().catch(e => showToast(e.message, true));
+    });
+    document.getElementById('btn-omrs-save').addEventListener('click', async () => {
+      if (!selectedOpenmrsId) return;
+      try {
+        const r = await api('/openmrs-appointments/' + selectedOpenmrsId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appointmentStart: fromDatetimeLocalValue(document.getElementById('omrs-edit-start').value),
+            locationUuid: document.getElementById('omrs-edit-location').value,
+            status: document.getElementById('omrs-edit-status').value,
+            reason: document.getElementById('omrs-edit-reason').value,
+            runSyncAfter: document.getElementById('omrs-mutate-sync').checked,
+            runPollAfter: document.getElementById('omrs-mutate-sync').checked
+          })
+        });
+        showToast(r.message, !r.success);
+        await loadAll();
+      } catch (e) { showToast(e.message, true); }
+    });
+    document.getElementById('btn-omrs-delete').addEventListener('click', async () => {
+      if (!selectedOpenmrsId || !confirm('Afspraak #' + selectedOpenmrsId + ' verwijderen (voided) in OpenMRS?')) return;
+      try {
+        const sync = document.getElementById('omrs-mutate-sync').checked;
+        const r = await api(
+          '/openmrs-appointments/' + selectedOpenmrsId + '?runSyncAfter=' + sync + '&runPollAfter=' + sync,
+          { method: 'DELETE' });
+        showToast(r.message, !r.success);
+        selectedOpenmrsId = null;
+        await loadAll();
+      } catch (e) { showToast(e.message, true); }
+    });
+    document.getElementById('btn-omrs-cancel-appt').addEventListener('click', async () => {
+      if (!selectedOpenmrsId) return;
+      document.getElementById('omrs-edit-status').value = 'CANCELLED';
+      document.getElementById('btn-omrs-save').click();
     });
     document.getElementById('auto-refresh').addEventListener('change', (e) => {
       if (e.target.checked) startAuto(); else stopAuto();
