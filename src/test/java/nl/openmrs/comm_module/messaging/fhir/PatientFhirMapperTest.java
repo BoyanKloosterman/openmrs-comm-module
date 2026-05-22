@@ -2,37 +2,30 @@ package nl.openmrs.comm_module.messaging.fhir;
 
 import ca.uhn.fhir.context.FhirContext;
 import nl.openmrs.comm_module.messaging.fhir.dto.PatientPollDto;
+import org.hl7.fhir.r5.model.ContactPoint;
+import org.hl7.fhir.r5.model.Enumerations;
 import org.hl7.fhir.r5.model.Patient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
 class PatientFhirMapperTest {
 
   private PatientFhirMapper mapper;
-
-  @Mock
   private FhirMessageValidator validator;
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
+    validator = new FhirMessageValidator();
     mapper = new PatientFhirMapper(validator);
-
-    // Default: alle valides resources zijn OK
-    when(validator.validatePatientResource(any(Patient.class)))
-        .thenReturn(FhirMessageValidationResult.valid());
   }
 
   @Test
@@ -56,29 +49,26 @@ class PatientFhirMapperTest {
     assertTrue(mapper.mapPatient(patient).isEmpty());
   }
 
-  // US-009 Validation tests
   @Test
-  void validatieFailureRetourneertLeegOptional() {
+  void patientZonderTelefoonWordtGeweigerd() {
     Patient patient = new Patient();
     patient.setId("pat-invalid");
-    patient.addName().setFamily("X");
+    patient.addName().setFamily("X").addGiven("Jan");
+    patient.setGender(Enumerations.AdministrativeGender.MALE);
 
-    when(validator.validatePatientResource(patient))
-        .thenReturn(FhirMessageValidationResult.invalid("Patient bevat geen telecom"));
-
-    Optional<PatientPollDto> result = mapper.mapPatient(patient);
-    assertTrue(result.isEmpty());
+    assertTrue(mapper.mapPatient(patient).isEmpty());
+    assertFalse(validator.validatePatientResource(patient).isValid());
   }
 
   @Test
-  void validatieSuccesResulteertInMapping() {
+  void patientMetTelefoonEnGenderWordtGemapped() {
     Patient patient = new Patient();
     patient.setId("pat-valid");
     patient.addName().setFamily("Janssen");
-    patient.addTelecom().setValue("+31612345678");
-
-    when(validator.validatePatientResource(patient))
-        .thenReturn(FhirMessageValidationResult.valid());
+    patient.setGender(Enumerations.AdministrativeGender.MALE);
+    patient.addTelecom()
+        .setSystem(ContactPoint.ContactPointSystem.PHONE)
+        .setValue("+31612345678");
 
     Optional<PatientPollDto> result = mapper.mapPatient(patient);
     assertTrue(result.isPresent());

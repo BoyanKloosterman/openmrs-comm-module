@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import ca.uhn.fhir.context.FhirContext;
 import java.util.Date;
 import org.hl7.fhir.r5.model.Appointment;
 import org.hl7.fhir.r5.model.Bundle;
@@ -17,9 +16,7 @@ import org.hl7.fhir.r5.model.Reference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Unit tests voor FhirMessageController (US-010).
@@ -29,24 +26,15 @@ class FhirMessageControllerTest {
   private FhirMessageController controller;
   private FhirMessageAckService ackService;
   private FhirMessageValidator messageValidator;
-
-  private FhirContext fhirContext;
-  private String validBundleJson;
-  private String invalidBundleJson;
+  private FhirMessageProcessor messageProcessor;
 
   @BeforeEach
   void setUp() {
-    fhirContext = FhirContext.forR5();
-
-    // Create mocks manually
     ackService = mock(FhirMessageAckService.class);
     messageValidator = mock(FhirMessageValidator.class);
+    messageProcessor = mock(FhirMessageProcessor.class);
 
-    // Create controller with mocks
-    controller = new FhirMessageController(ackService, messageValidator);
-
-    validBundleJson = createValidBundleJson();
-    invalidBundleJson = createInvalidBundleJson();
+    controller = new FhirMessageController(ackService, messageValidator, messageProcessor);
   }
 
   // ============ Happy path tests ============
@@ -58,6 +46,8 @@ class FhirMessageControllerTest {
 
     when(messageValidator.validate(any(Bundle.class)))
         .thenReturn(FhirMessageValidationResult.valid());
+    when(messageProcessor.process(any(Bundle.class)))
+        .thenReturn(FhirMessageProcessingResult.success());
     when(ackService.extractMessageId(bundle)).thenReturn(messageId);
 
     OperationOutcome ack = new OperationOutcome();
@@ -69,7 +59,9 @@ class FhirMessageControllerTest {
     assertEquals(HttpStatus.OK, response.getStatusCode());
     assertNotNull(response.getBody());
     verify(messageValidator, times(1)).validate(any(Bundle.class));
+    verify(messageProcessor, times(1)).process(any(Bundle.class));
     verify(ackService, times(1)).generateAck(messageId);
+    verify(ackService, never()).generateNack(any(), any(), any());
   }
 
   @Test
@@ -79,6 +71,8 @@ class FhirMessageControllerTest {
 
     when(messageValidator.validate(any(Bundle.class)))
         .thenReturn(FhirMessageValidationResult.valid());
+    when(messageProcessor.process(any(Bundle.class)))
+        .thenReturn(FhirMessageProcessingResult.success());
     when(ackService.extractMessageId(bundle)).thenReturn(messageId);
 
     OperationOutcome ack = new OperationOutcome();
@@ -126,6 +120,28 @@ class FhirMessageControllerTest {
     verify(messageValidator, times(1)).validate(any(Bundle.class));
     verify(ackService, times(1))
         .generateNack("msg-invalid", errorMsg, OperationOutcome.IssueSeverity.ERROR);
+    verify(messageProcessor, never()).process(any(Bundle.class));
+  }
+
+  @Test
+  void receiveMessage_processingFails_shouldReturnNackWithoutCallingAck() {
+    Bundle bundle = createValidBundle();
+
+    when(messageValidator.validate(any(Bundle.class)))
+        .thenReturn(FhirMessageValidationResult.valid());
+    when(messageProcessor.process(any(Bundle.class)))
+        .thenReturn(FhirMessageProcessingResult.failure("Verwerking mislukt"));
+    when(ackService.extractMessageId(bundle)).thenReturn("msg-001");
+
+    OperationOutcome nack = new OperationOutcome();
+    when(ackService.generateNack("msg-001", "Verwerking mislukt", OperationOutcome.IssueSeverity.ERROR))
+        .thenReturn(nack);
+
+    ResponseEntity<OperationOutcome> response = controller.receiveMessage(bundle);
+
+    assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    verify(messageProcessor, times(1)).process(any(Bundle.class));
+    verify(ackService, never()).generateAck(any());
   }
 
   @Test
@@ -241,13 +257,4 @@ class FhirMessageControllerTest {
     return bundle;
   }
 
-  private String createValidBundleJson() {
-    return fhirContext.newJsonParser().encodeResourceToString(createValidBundle());
-  }
-
-  private String createInvalidBundleJson() {
-    Bundle invalidBundle = new Bundle();
-    // No entries, no ID - invalid
-    return fhirContext.newJsonParser().encodeResourceToString(invalidBundle);
-  }
 }

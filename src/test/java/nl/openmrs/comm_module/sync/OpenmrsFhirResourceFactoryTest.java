@@ -1,8 +1,10 @@
 package nl.openmrs.comm_module.sync;
 
 import nl.openmrs.comm_module.config.OpenmrsSchedulingSyncProperties;
+import nl.openmrs.comm_module.messaging.fhir.FhirMessageValidator;
 import nl.openmrs.comm_module.messaging.fhir.OpenmrsFhirAppointmentMetadata;
 import org.hl7.fhir.r5.model.Appointment;
+import org.hl7.fhir.r5.model.Enumerations;
 import org.hl7.fhir.r5.model.Patient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,8 @@ class OpenmrsFhirResourceFactoryTest {
         Patient patient = factory.buildPatient(row, properties);
         assertEquals("uuid-1", patient.getIdElement().getIdPart());
         assertTrue(patient.getTelecomFirstRep().hasValue());
+        assertEquals(Enumerations.AdministrativeGender.UNKNOWN, patient.getGender());
+        assertTrue(new FhirMessageValidator().validatePatientResource(patient).isValid());
     }
 
     @Test

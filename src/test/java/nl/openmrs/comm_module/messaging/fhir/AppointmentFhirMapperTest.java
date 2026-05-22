@@ -6,8 +6,6 @@ import org.hl7.fhir.r5.model.Appointment;
 import org.hl7.fhir.r5.model.Reference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -20,24 +18,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
 class AppointmentFhirMapperTest {
 
   private AppointmentFhirMapper mapper;
-
-  @Mock
   private FhirMessageValidator validator;
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
+    validator = new FhirMessageValidator();
     mapper = new AppointmentFhirMapper(validator);
-
-    // Default: alle valides resources zijn OK
-    when(validator.validateAppointmentResource(any(Appointment.class)))
-        .thenReturn(FhirMessageValidationResult.valid());
   }
 
   @Test
@@ -139,38 +129,14 @@ class AppointmentFhirMapperTest {
     assertEquals("Medicijnen meenemen", dto.reason());
   }
 
-  // US-009 Validation tests
   @Test
-  void validatieFailureRetourneertLeegOptional() {
-    Appointment appointment = appointmentMet(
-        "u8",
-        Appointment.AppointmentStatus.BOOKED,
-        Date.from(Instant.parse("2026-01-01T10:00:00Z")),
-        patientRef("p1"),
-        null);
+  void appointmentZonderPatientReferentieWordtGeweigerd() {
+    Appointment appointment = new Appointment();
+    appointment.setId("u8");
+    appointment.setStatus(Appointment.AppointmentStatus.BOOKED);
+    appointment.setStart(Date.from(Instant.parse("2026-01-01T10:00:00Z")));
 
-    when(validator.validateAppointmentResource(appointment))
-        .thenReturn(FhirMessageValidationResult.invalid("Appointment bevat geen start"));
-
-    Optional<AppointmentPollDto> result = mapper.map(appointment);
-    assertTrue(result.isEmpty());
-  }
-
-  @Test
-  void validatieSuccesResulteertInMapping() {
-    Appointment appointment = appointmentMet(
-        "u9",
-        Appointment.AppointmentStatus.BOOKED,
-        Date.from(Instant.parse("2026-01-01T10:00:00Z")),
-        patientRef("p1"),
-        null);
-
-    when(validator.validateAppointmentResource(appointment))
-        .thenReturn(FhirMessageValidationResult.valid());
-
-    Optional<AppointmentPollDto> result = mapper.map(appointment);
-    assertTrue(result.isPresent());
-    assertEquals("p1", result.get().patientId());
+    assertTrue(mapper.map(appointment).isEmpty());
   }
 
   private static Appointment appointmentMet(

@@ -34,12 +34,15 @@ public class FhirMessageController {
 
   private final FhirMessageAckService ackService;
   private final FhirMessageValidator messageValidator;
+  private final FhirMessageProcessor messageProcessor;
 
   public FhirMessageController(
       FhirMessageAckService ackService,
-      FhirMessageValidator messageValidator) {
+      FhirMessageValidator messageValidator,
+      FhirMessageProcessor messageProcessor) {
     this.ackService = ackService;
     this.messageValidator = messageValidator;
+    this.messageProcessor = messageProcessor;
   }
 
   /**
@@ -57,25 +60,32 @@ public class FhirMessageController {
   public ResponseEntity<OperationOutcome> receiveMessage(@RequestBody Bundle bundle) {
     log.info("FHIR-bericht ontvangen");
 
-    // Valideer het bericht
     FhirMessageValidationResult validationResult = messageValidator.validate(bundle);
-
     if (!validationResult.isValid()) {
-      // NACK bij validatiefout
-      String messageId = ackService.extractMessageId(bundle);
-      OperationOutcome nack = ackService.generateNack(
-          messageId,
-          validationResult.getErrorMessage(),
-          OperationOutcome.IssueSeverity.ERROR);
       log.warn("FHIR-bericht validatie mislukt: {}", validationResult.getErrorMessage());
-      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(nack);
+      return nack(bundle, validationResult.getErrorMessage());
     }
 
-    // ACK bij succesvolle verwerking
+    log.info("FHIR-bericht validatie succesvol");
+
+    FhirMessageProcessingResult processingResult = messageProcessor.process(bundle);
+    if (!processingResult.isSuccessful()) {
+      log.warn("FHIR-bericht verwerking mislukt: {}", processingResult.getErrorMessage());
+      return nack(bundle, processingResult.getErrorMessage());
+    }
+
     String messageId = ackService.extractMessageId(bundle);
     OperationOutcome ack = ackService.generateAck(messageId);
-
-    log.info("FHIR-bericht succesvol verwerkt en ACK verstuurd voor message ID: {}", messageId);
+    log.info("FHIR-bericht succesvol verwerkt; ACK verstuurd voor message ID: {}", messageId);
     return ResponseEntity.status(HttpStatus.OK).body(ack);
+  }
+
+  private ResponseEntity<OperationOutcome> nack(Bundle bundle, String errorMessage) {
+    String messageId = ackService.extractMessageId(bundle);
+    OperationOutcome nack = ackService.generateNack(
+        messageId,
+        errorMessage,
+        OperationOutcome.IssueSeverity.ERROR);
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(nack);
   }
 }

@@ -2,6 +2,7 @@ package nl.openmrs.comm_module.messaging.fhir;
 
 import org.hl7.fhir.r5.model.Bundle;
 import org.hl7.fhir.r5.model.Bundle.BundleEntryComponent;
+import org.hl7.fhir.r5.model.ContactPoint;
 import org.hl7.fhir.r5.model.Patient;
 import org.hl7.fhir.r5.model.Appointment;
 import org.slf4j.Logger;
@@ -47,12 +48,18 @@ public class FhirMessageValidator {
       return FhirMessageValidationResult.invalid("FHIR Bundle is null");
     }
 
-    if (!bundle.hasEntry() || bundle.getEntry().isEmpty()) {
+    // Valideer Bundle structuur
+    FhirMessageValidationResult structureValidation = validateBundleStructure(bundle);
+    if (!structureValidation.isValid()) {
+      return structureValidation;
+    }
+
+    if (!hasBundleEntries(bundle)) {
       log.warn("FHIR Bundle bevat geen entries");
       return FhirMessageValidationResult.invalid("FHIR Bundle bevat geen entries");
     }
 
-    // Valideer elk entry in de bundle
+    boolean hasSupportedResource = false;
     int entryIndex = 0;
     for (BundleEntryComponent entry : bundle.getEntry()) {
       if (entry.getResource() == null) {
@@ -61,16 +68,14 @@ public class FhirMessageValidator {
             "Entry " + entryIndex + " bevat geen resource");
       }
 
-      // Valideer Patient entries
       if (entry.getResource() instanceof Patient patient) {
+        hasSupportedResource = true;
         FhirMessageValidationResult patientValidation = validatePatient(patient, entryIndex);
         if (!patientValidation.isValid()) {
           return patientValidation;
         }
-      }
-
-      // Valideer Appointment entries
-      if (entry.getResource() instanceof Appointment appointment) {
+      } else if (entry.getResource() instanceof Appointment appointment) {
+        hasSupportedResource = true;
         FhirMessageValidationResult appointmentValidation = validateAppointment(appointment, entryIndex);
         if (!appointmentValidation.isValid()) {
           return appointmentValidation;
@@ -80,7 +85,56 @@ public class FhirMessageValidator {
       entryIndex++;
     }
 
+    if (!hasSupportedResource) {
+      String msg = "Bundle bevat geen Patient of Appointment resources";
+      log.warn(msg);
+      return FhirMessageValidationResult.invalid(msg);
+    }
+
     log.debug("FHIR Bundle validatie succesvol");
+    return FhirMessageValidationResult.valid();
+  }
+
+  /**
+   * Valideert de FHIR Bundle-structuur (US-009 uitbreiding).
+   * 
+   * <p>
+   * Controleert:
+   * - Bundle heeft geldige type
+   * - Bundle ID format (indien aanwezig)
+   */
+  private FhirMessageValidationResult validateBundleStructure(Bundle bundle) {
+    // Valideer Bundle type
+    if (!bundle.hasType()) {
+      String msg = "Bundle bevat geen type";
+      log.warn(msg);
+      return FhirMessageValidationResult.invalid(msg);
+    }
+
+    // Valideer dat Bundle type geldig is
+    try {
+      Bundle.BundleType bundleType = bundle.getType();
+      if (bundleType == null) {
+        String msg = "Bundle type is ongeldig";
+        log.warn(msg);
+        return FhirMessageValidationResult.invalid(msg);
+      }
+    } catch (Exception e) {
+      String msg = "Bundle type format is ongeldig: " + e.getMessage();
+      log.warn(msg);
+      return FhirMessageValidationResult.invalid(msg);
+    }
+
+    if (bundle.hasId()) {
+      String bundleId = bundle.getIdElement().getIdPart();
+      if (bundleId.isBlank() || !isValidFhirId(bundleId)) {
+        String msg = "Bundle bevat ongeldig id format: " + bundleId;
+        log.warn(msg);
+        return FhirMessageValidationResult.invalid(msg);
+      }
+    }
+
+    log.debug("Bundle structuur validatie succesvol");
     return FhirMessageValidationResult.valid();
   }
 
@@ -99,14 +153,23 @@ public class FhirMessageValidator {
    * @return FhirMessageValidationResult met validatiestatus
    */
   private FhirMessageValidationResult validatePatient(Patient patient, int entryIndex) {
-    if (!patient.hasId() || patient.getId().isBlank()) {
+    if (!patient.hasId() || patient.getIdElement().getIdPart().isBlank()) {
       String msg = "Patient (entry " + entryIndex + ") bevat geen id";
       log.warn(msg);
       return FhirMessageValidationResult.invalid(msg);
     }
 
+    String patientId = patient.getIdElement().getIdPart();
+
+    // Syntax validatie: id format
+    if (!isValidFhirId(patientId)) {
+      String msg = "Patient " + patientId + " (entry " + entryIndex + ") bevat ongeldig id format";
+      log.warn(msg);
+      return FhirMessageValidationResult.invalid(msg);
+    }
+
     if (!patient.hasName() || patient.getName().isEmpty()) {
-      String msg = "Patient " + patient.getId() + " (entry " + entryIndex + ") bevat geen name";
+      String msg = "Patient " + patientId + " (entry " + entryIndex + ") bevat geen name";
       log.warn(msg);
       return FhirMessageValidationResult.invalid(msg);
     }
@@ -115,7 +178,7 @@ public class FhirMessageValidator {
         .anyMatch(name -> name.hasGiven() || name.hasFamily());
     if (!hasValidName) {
       String msg = "Patient "
-          + patient.getId()
+          + patientId
           + " (entry "
           + entryIndex
           + ") bevat geen gegeven of familienaam";
@@ -125,7 +188,7 @@ public class FhirMessageValidator {
 
     if (!patient.hasGender() && !patient.hasBirthDate()) {
       String msg = "Patient "
-          + patient.getId()
+          + patientId
           + " (entry "
           + entryIndex
           + ") bevat geen gender en geen birthDate";
@@ -133,17 +196,24 @@ public class FhirMessageValidator {
       return FhirMessageValidationResult.invalid(msg);
     }
 
-    if (!patient.hasTelecom() || patient.getTelecom().isEmpty()) {
-      String msg = "Patient "
-          + patient.getId()
-          + " (entry "
-          + entryIndex
-          + ") bevat geen telecom (geen contact informatie)";
+    // Syntax validatie: birthDate format (als aanwezig)
+    if (patient.hasBirthDate() && patient.getBirthDate() == null) {
+      String msg = "Patient " + patientId + " (entry " + entryIndex + ") bevat ongeldig birthDate format";
       log.warn(msg);
       return FhirMessageValidationResult.invalid(msg);
     }
 
-    log.debug("Patient {} validatie succesvol", patient.getId());
+    if (!hasPhoneTelecom(patient)) {
+      String msg = "Patient "
+          + patientId
+          + " (entry "
+          + entryIndex
+          + ") bevat geen telefoon in telecom";
+      log.warn(msg);
+      return FhirMessageValidationResult.invalid(msg);
+    }
+
+    log.debug("Patient {} validatie succesvol", patientId);
     return FhirMessageValidationResult.valid();
   }
 
@@ -161,20 +231,41 @@ public class FhirMessageValidator {
    * @return FhirMessageValidationResult met validatiestatus
    */
   private FhirMessageValidationResult validateAppointment(Appointment appointment, int entryIndex) {
-    if (!appointment.hasId() || appointment.getId().isBlank()) {
+    if (!appointment.hasId() || appointment.getIdElement().getIdPart().isBlank()) {
       String msg = "Appointment (entry " + entryIndex + ") bevat geen id";
+      log.warn(msg);
+      return FhirMessageValidationResult.invalid(msg);
+    }
+
+    String appointmentId = appointment.getIdElement().getIdPart();
+
+    // Syntax validatie: id format
+    if (!isValidFhirId(appointmentId)) {
+      String msg = "Appointment " + appointmentId + " (entry " + entryIndex + ") bevat ongeldig id format";
       log.warn(msg);
       return FhirMessageValidationResult.invalid(msg);
     }
 
     if (!appointment.hasStart()) {
       String msg = "Appointment "
-          + appointment.getId()
+          + appointmentId
           + " (entry "
           + entryIndex
           + ") bevat geen start (afspraaktijd)";
       log.warn(msg);
       return FhirMessageValidationResult.invalid(msg);
+    }
+
+    // Syntax validatie: start is valide datum/tijd
+    if (appointment.getStart() == null) {
+      String msg = "Appointment " + appointmentId + " (entry " + entryIndex + ") bevat ongeldig start format";
+      log.warn(msg);
+      return FhirMessageValidationResult.invalid(msg);
+    }
+
+    // Syntax validatie: start is niet in het verleden (of minimaal vandaag)
+    if (appointment.getStart().before(new java.util.Date())) {
+      log.debug("Appointment " + appointmentId + " (entry " + entryIndex + ") ligt in het verleden");
     }
 
     // Check voor patient-referentie via subject of participant
@@ -185,7 +276,7 @@ public class FhirMessageValidator {
 
     if (!hasPatientReference) {
       String msg = "Appointment "
-          + appointment.getId()
+          + appointmentId
           + " (entry "
           + entryIndex
           + ") bevat geen patient-referentie (subject of participant)";
@@ -193,8 +284,111 @@ public class FhirMessageValidator {
       return FhirMessageValidationResult.invalid(msg);
     }
 
-    log.debug("Appointment {} validatie succesvol", appointment.getId());
+    // Syntax validatie: patient-referentie format
+    FhirMessageValidationResult refValidation = validatePatientReferences(appointment, appointmentId, entryIndex);
+    if (!refValidation.isValid()) {
+      return refValidation;
+    }
+
+    log.debug("Appointment {} validatie succesvol", appointmentId);
     return FhirMessageValidationResult.valid();
+  }
+
+  /**
+   * Valideert de patiënt-referenties in een Appointment (US-009
+   * syntaxiscontrole).
+   */
+  private FhirMessageValidationResult validatePatientReferences(
+      Appointment appointment, String appointmentId, int entryIndex) {
+    if (appointment.hasSubject()) {
+      String refValue = appointment.getSubject().getReference();
+      if (refValue != null && !refValue.isBlank()) {
+        if (!isValidFhirReference(refValue, "Patient")) {
+          String msg = "Appointment " + appointmentId + " (entry " + entryIndex
+              + ") bevat ongeldig subject reference format: " + refValue;
+          log.warn(msg);
+          return FhirMessageValidationResult.invalid(msg);
+        }
+      }
+    }
+
+    if (appointment.hasParticipant()) {
+      for (Appointment.AppointmentParticipantComponent participant : appointment.getParticipant()) {
+        if (participant.hasActor()) {
+          String refValue = participant.getActor().getReference();
+          if (refValue != null && !refValue.isBlank() && refValue.startsWith("Patient/")) {
+            if (!isValidFhirReference(refValue, "Patient")) {
+              String msg = "Appointment " + appointmentId + " (entry " + entryIndex
+                  + ") bevat ongeldig participant reference format: " + refValue;
+              log.warn(msg);
+              return FhirMessageValidationResult.invalid(msg);
+            }
+          }
+        }
+      }
+    }
+
+    return FhirMessageValidationResult.valid();
+  }
+
+  /**
+   * Valideert of een string een valide FHIR-referentie is.
+   * Format: "ResourceType/id"
+   */
+  private boolean isValidFhirReference(String reference, String expectedResourceType) {
+    if (reference == null || reference.isBlank()) {
+      return false;
+    }
+    String[] parts = reference.split("/");
+    if (parts.length != 2) {
+      return false;
+    }
+    String resourceType = parts[0];
+    String id = parts[1];
+
+    if (!resourceType.equals(expectedResourceType)) {
+      return false;
+    }
+    return isValidFhirId(id);
+  }
+
+  /**
+   * Valideert of een string een valide FHIR-id is.
+   * FHIR IDs mogen alphanumeriek zijn met enkele speciale karakters.
+   */
+  /**
+   * US-009: minimaal één telecom met bruikbaar telefoonnummer (system phone/sms/other of leeg).
+   */
+  private boolean hasPhoneTelecom(Patient patient) {
+    if (!patient.hasTelecom()) {
+      return false;
+    }
+    return patient.getTelecom().stream().anyMatch(FhirMessageValidator::isUsablePhoneContact);
+  }
+
+  private static boolean isUsablePhoneContact(ContactPoint contactPoint) {
+    if (!contactPoint.hasValue() || contactPoint.getValue().isBlank()) {
+      return false;
+    }
+    if (!contactPoint.hasSystem()) {
+      return true;
+    }
+    ContactPoint.ContactPointSystem system = contactPoint.getSystem();
+    return system == ContactPoint.ContactPointSystem.PHONE
+        || system == ContactPoint.ContactPointSystem.SMS
+        || system == ContactPoint.ContactPointSystem.OTHER;
+  }
+
+  private static boolean hasBundleEntries(Bundle bundle) {
+    return bundle.getEntry() != null && !bundle.getEntry().isEmpty();
+  }
+
+  private boolean isValidFhirId(String id) {
+    if (id == null || id.isBlank()) {
+      return false;
+    }
+    // FHIR IDs: 1-64 karakters, alleen [A-Za-z0-9\-\.]
+    return id.matches("[A-Za-z0-9\\-\\.]{1,64}");
   }
 
   /**

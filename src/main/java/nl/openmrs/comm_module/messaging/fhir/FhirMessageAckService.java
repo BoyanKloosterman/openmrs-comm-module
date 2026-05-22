@@ -102,9 +102,9 @@ public class FhirMessageAckService {
       return "unknown";
     }
 
-    // Probeer eerst Bundle.id
+    // Probeer eerst Bundle.id (alleen het id-deel, zonder resourceType-prefix)
     if (bundle.hasId()) {
-      return bundle.getId();
+      return bundle.getIdElement().getIdPart();
     }
 
     // Fallback: identifier als aanwezig

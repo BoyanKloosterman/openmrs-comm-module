@@ -39,13 +39,43 @@ class FhirMessageValidatorTest {
   }
 
   @Test
+  void validate_bundleWithoutType_shouldReturnInvalid() {
+    Bundle bundle = new Bundle();
+    // type not set
+    bundle.addEntry().setResource(createValidPatient("pat-001"));
+
+    FhirMessageValidationResult result = validator.validate(bundle);
+
+    assertFalse(result.isValid());
+    assertTrue(result.getErrorMessage().contains("type"));
+  }
+
+  @Test
   void validate_emptyBundle_shouldReturnInvalid() {
     Bundle bundle = new Bundle();
+    bundle.setType(Bundle.BundleType.TRANSACTION);
+    // no entries
 
     FhirMessageValidationResult result = validator.validate(bundle);
 
     assertFalse(result.isValid());
     assertTrue(result.getErrorMessage().contains("geen entries"));
+  }
+
+  @Test
+  void validate_bundleWithValidType_shouldPassStructureValidation() {
+    Bundle bundle = new Bundle();
+    bundle.setType(Bundle.BundleType.TRANSACTION);
+    bundle.addEntry().setResource(createValidPatient("pat-001"));
+
+    FhirMessageValidationResult result = validator.validate(bundle);
+
+    // Should pass structure validation and only fail if patient is invalid
+    assertNotNull(result);
+    // If it fails, it should be for patient reasons, not bundle type
+    if (!result.isValid()) {
+      assertFalse(result.getErrorMessage().contains("type"));
+    }
   }
 
   // ============ Patient validation tests ============
@@ -110,7 +140,7 @@ class FhirMessageValidatorTest {
     FhirMessageValidationResult result = validator.validate(bundle);
 
     assertFalse(result.isValid());
-    assertTrue(result.getErrorMessage().contains("geen telecom"));
+    assertTrue(result.getErrorMessage().contains("telefoon"));
   }
 
   @Test
@@ -201,11 +231,91 @@ class FhirMessageValidatorTest {
     assertTrue(result.isValid());
   }
 
+  // ============ Syntax/Structure validation tests (US-009 enhancement)
+  // ============
+
+  @Test
+  void validate_patientWithInvalidIdFormat_shouldReturnInvalid() {
+    Patient patient = new Patient();
+    patient.setId("pat-001@invalid"); // invalid character @
+    patient.addName(createValidHumanName());
+    patient.setGender(Enumerations.AdministrativeGender.MALE);
+    patient.addTelecom(createValidContactPoint());
+
+    Bundle bundle = createBundleWithEntry(patient);
+
+    FhirMessageValidationResult result = validator.validate(bundle);
+
+    assertFalse(result.isValid());
+    assertTrue(result.getErrorMessage().contains("ongeldig id format"));
+  }
+
+  @Test
+  void validate_appointmentWithInvalidIdFormat_shouldReturnInvalid() {
+    Appointment appointment = new Appointment();
+    appointment.setId("apt-001#invalid"); // invalid character #
+    appointment.setStart(new Date());
+    appointment.setSubject(new Reference("Patient/pat-001"));
+
+    Bundle bundle = createBundleWithEntry(appointment);
+
+    FhirMessageValidationResult result = validator.validate(bundle);
+
+    assertFalse(result.isValid());
+    assertTrue(result.getErrorMessage().contains("ongeldig id format"));
+  }
+
+  @Test
+  void validate_appointmentWithInvalidPatientReferenceFormat_shouldReturnInvalid() {
+    Appointment appointment = new Appointment();
+    appointment.setId("apt-005");
+    appointment.setStart(new Date());
+    appointment.setSubject(new Reference("Patient/pat-001@invalid")); // invalid patient ID
+
+    Bundle bundle = createBundleWithEntry(appointment);
+
+    FhirMessageValidationResult result = validator.validate(bundle);
+
+    assertFalse(result.isValid());
+    assertTrue(result.getErrorMessage().contains("ongeldig") || result.getErrorMessage().contains("reference"));
+  }
+
+  @Test
+  void validate_patientWithInvalidTelecomFormat_shouldReturnInvalid() {
+    Patient patient = new Patient();
+    patient.setId("pat-005");
+    patient.addName(createValidHumanName());
+    patient.setGender(Enumerations.AdministrativeGender.MALE);
+    patient.addTelecom()
+        .setSystem(ContactPoint.ContactPointSystem.EMAIL)
+        .setValue("jan@example.com");
+
+    Bundle bundle = createBundleWithEntry(patient);
+
+    FhirMessageValidationResult result = validator.validate(bundle);
+
+    assertFalse(result.isValid());
+    assertTrue(result.getErrorMessage().contains("telefoon"));
+  }
+
+  @Test
+  void validate_bundleWithoutPatientOrAppointment_shouldReturnInvalid() {
+    Bundle bundle = new Bundle();
+    bundle.setType(Bundle.BundleType.COLLECTION);
+    bundle.addEntry().setResource(new org.hl7.fhir.r5.model.OperationOutcome());
+
+    FhirMessageValidationResult result = validator.validate(bundle);
+
+    assertFalse(result.isValid());
+    assertTrue(result.getErrorMessage().contains("geen Patient of Appointment"));
+  }
+
   // ============ Combined/integration tests ============
 
   @Test
   void validate_bundleWithValidPatientAndAppointment_shouldReturnValid() {
     Bundle bundle = new Bundle();
+    bundle.setType(Bundle.BundleType.TRANSACTION);
     bundle.addEntry().setResource(createValidPatient("pat-001"));
 
     Appointment appointment = new Appointment();
@@ -273,7 +383,7 @@ class FhirMessageValidatorTest {
     FhirMessageValidationResult result = validator.validatePatientResource(patient);
 
     assertFalse(result.isValid());
-    assertTrue(result.getErrorMessage().contains("geen telecom"));
+    assertTrue(result.getErrorMessage().contains("telefoon"));
   }
 
   @Test
@@ -313,6 +423,7 @@ class FhirMessageValidatorTest {
 
   private Bundle createBundleWithEntry(org.hl7.fhir.r5.model.Resource resource) {
     Bundle bundle = new Bundle();
+    bundle.setType(Bundle.BundleType.TRANSACTION); // Always set a bundle type for valid bundles
     bundle.addEntry().setResource(resource);
     return bundle;
   }

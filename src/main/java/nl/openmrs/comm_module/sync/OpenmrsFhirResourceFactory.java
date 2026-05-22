@@ -6,6 +6,7 @@ import org.hl7.fhir.r5.model.Appointment;
 import org.hl7.fhir.r5.model.CodeableConcept;
 import org.hl7.fhir.r5.model.CodeableReference;
 import org.hl7.fhir.r5.model.ContactPoint;
+import org.hl7.fhir.r5.model.Enumerations;
 import org.hl7.fhir.r5.model.HumanName;
 import org.hl7.fhir.r5.model.Patient;
 import org.hl7.fhir.r5.model.Reference;
@@ -35,15 +36,25 @@ public class OpenmrsFhirResourceFactory {
         if (row.familyName() != null && !row.familyName().isBlank()) {
             name.setFamily(row.familyName().trim());
         }
+        if (!name.hasGiven() && !name.hasFamily()) {
+            name.setFamily("Onbekend");
+        }
         patient.addName(name);
 
+        // US-009: gender of birthDate verplicht; OpenMRS JDBC levert geen gender → unknown
+        patient.setGender(Enumerations.AdministrativeGender.UNKNOWN);
+
         String phone = resolvePhone(row, properties);
-        if (phone != null) {
-            patient.addTelecom(
-                    new ContactPoint()
-                            .setSystem(ContactPoint.ContactPointSystem.PHONE)
-                            .setValue(phone));
+        if (phone == null || phone.isBlank()) {
+            throw new IllegalStateException(
+                    "Patient "
+                            + row.patientUuid()
+                            + " heeft geen telefoonnummer; stel OPENMRS_SCHEDULING_SYNC_FALLBACK_PHONE in");
         }
+        patient.addTelecom(
+                new ContactPoint()
+                        .setSystem(ContactPoint.ContactPointSystem.PHONE)
+                        .setValue(phone));
         return patient;
     }
 
