@@ -1,6 +1,6 @@
 # Performancerapportage — OpenMRS Communicatiemodule
 
-Versie 1.0 | Sprint 3 | Meting: 21 mei 2026
+Versie 1.1 | Sprint 3 | Meting enqueue/consumer/scheduler: 21 mei 2026; document bijgewerkt 22 mei 2026
 
 Beknopte onderbouwing voor het rubricumcriterium **betrouwbaarheid**: throughput onder belasting, latency bij provider-aanroepen, en aantoonbare verbetering ten opzichte van een eerdere architectuur. Sluit aan op deliverable 4 uit [docs/sprint3-doelen.txt](docs/sprint3-doelen.txt).
 
@@ -8,14 +8,14 @@ Beknopte onderbouwing voor het rubricumcriterium **betrouwbaarheid**: throughput
 
 ## Samenvatting
 
-| Metriek | Waarde (lokale Docker-stack, 21-05-2026) |
-|---------|------------------------------------------|
-| Queue-throughput (POST `/api/notifications/test`, 50×) | **~526 req/s** (alleen enqueue; 95 ms totaal) |
+| Metriek | Waarde (lokale Docker-stack) |
+|---------|------------------------------|
+| Queue-throughput (POST `/api/notifications/test`, 50×) | **~526 req/s** (alleen enqueue; 95 ms totaal, 21-05-2026) |
 | Gem. HTTP-latency enqueue | **~0,43 ms** per request (Micrometer) |
 | Gem. end-to-end consumer (queue → fake provider) | **~82 ms** per bericht (`spring_rabbitmq_listener_seconds`, SWIFTSEND) |
-| Max. consumer-latency (recent) | **~2 ms** (piek in laatste window; zie toelichting) |
 | Scheduler-tick (`checkDueNotifications`) | **~2,6 ms** gemiddeld (85 ticks) |
-| FHIR-poll-tick | **~80 ms** gemiddeld (85 ticks; externe HAPI-call) |
+| Appointment-poll-tick (`pollOpenmrsFhir`, **FHIR-modus**) | **~80 ms** gemiddeld (85 ticks; incl. FHIR `/metadata`) |
+| Appointment-poll-tick (**JDBC-modus**, reference distro) | Niet hergemeten in v1.1; typisch **lager** (geen FHIR-roundtrip, wel MariaDB-query) |
 
 De module is ontworpen voor **batch-herinneringen** (poll + minutely scheduler), niet voor duizenden berichten per seconde. Metingen tonen voldoende marge voor typische kliniekvolumes (honderden afspraken per dag).
 
@@ -27,10 +27,15 @@ De module is ontworpen voor **batch-herinneringen** (poll + minutely scheduler),
 |-----------|--------------|
 | Stack | `docker compose` (zie [README.md](README.md)) |
 | Comm-module | `http://localhost:8081` |
+| OpenMRS (lokaal) | Reference distro aparte compose, poort **80**; MariaDB host **3307** bij JDBC-poll |
+| Poll (standaard `.env.example`) | `OPENMRS_FHIR_POLL_MODE=jdbc`, `OPENMRS_SCHEDULING_SOURCE=patient-appointment` |
+| Poll (historische meting 21-05) | `OPENMRS_FHIR_POLL_MODE=fhir` + FHIR2 R5 URL |
 | Provider | `fakecomworld` op poort 1337 |
 | Metrics | Prometheus scrape → `http://localhost:8081/actuator/prometheus` |
 | Dashboard | Grafana `http://localhost:3000` (datasource Prometheus) |
 | Belastingstest | PowerShell: 50× `POST /api/notifications/test` |
+
+Bij **meerdere organisaties** (`openmrs.fhir.organisations.*`) voert één scheduler-tick opeenvolgens één poll per actieve bron uit; totale poll-duur ≈ som per organisatie.
 
 ---
 
@@ -38,7 +43,7 @@ De module is ontworpen voor **batch-herinneringen** (poll + minutely scheduler),
 
 ### 1.1 Enqueue (API → RabbitMQ)
 
-Meting: 50 opeenvolgende test-notificaties.
+Meting: 50 opeenvolgende test-notificaties (21-05-2026).
 
 ```
 50 requests in 95 ms (~526 req/s)
@@ -123,9 +128,24 @@ Bij falen: `RabbitMqProducer.publishRetry` met exponential backoff (`messaging.r
 
 Effect op latency: mislukte pogingen verlengen totale doorlooptijd bewust (resiliency), zonder de scheduler te blokkeren.
 
-### 2.3 FHIR-poll (niet provider, wel kritiek pad)
+### 2.3 Appointment-poll (niet provider, wel kritiek pad)
 
-`pollOpenmrsFhir`: **~80 ms** gemiddeld per tick — externe HAPI-latency. Faalt de poll, dan blijven bestaande `polled_appointment`-rijen beschikbaar voor de scheduler (zie [docs/ADR-3-hoe-koppelen-we-aan-openmrs.md](docs/ADR-3-hoe-koppelen-we-aan-openmrs.md)).
+De scheduled methode heet `pollOpenmrsFhir`; de bron hangt af van `openmrs.fhir.poll-mode`:
+
+| Modus | Gedrag | Latency (meting) |
+|-------|--------|------------------|
+| **fhir** | FHIR R5 search + optioneel serverinfo | **~80 ms** gem. per tick (21-05-2026, HAPI/FHIR2) |
+| **jdbc** | `patient_appointment` via OpenMRS MariaDB | Geen FHIR-call; duur afhankelijk van DB en rijtelling — **niet hergemeten** in v1.1 |
+
+Faalt de poll, dan blijven bestaande `polled_appointment`-rijen beschikbaar voor de scheduler (zie [docs/ADR-3-hoe-koppelen-we-aan-openmrs.md](docs/ADR-3-hoe-koppelen-we-aan-openmrs.md)).
+
+PromQL (zelfde metric-naam voor beide modi):
+
+```promql
+rate(tasks_scheduled_execution_seconds_sum{code_function="pollOpenmrsFhir"}[5m])
+/
+rate(tasks_scheduled_execution_seconds_count{code_function="pollOpenmrsFhir"}[5m])
+```
 
 ---
 
@@ -137,15 +157,17 @@ Er is geen aparte load-test-suite in de repository; verbetering wordt onderbouwd
 
 | Aspect | Vroeger gedrag | Risico |
 |--------|----------------|--------|
-| Verzending | Direct in scheduler- of poll-thread | Blokkeert ticks; FHIR/poll vertraagt bij trage provider |
+| Verzending | Direct in scheduler- of poll-thread | Blokkeert ticks; poll vertraagt bij trage provider |
 | Foutafhandeling | Geen queue / beperkte retry | Bericht verloren bij korte provider-storing |
 | Dubbele runs | Geen delivery-log deduplicatie | Dubbele SMS bij herhaalde scheduler-tick |
 
-### Huidige versie (meting sprint 3)
+### Huidige versie
 
 | Aspect | Huidige implementatie | Aantoonbaar effect |
 |--------|----------------------|-------------------|
 | Ontkoppeling | RabbitMQ + async consumer | Scheduler **~2,6 ms** vs provider **~82 ms** — provider-latency blokkeert scheduling niet |
+| Poll-flexibiliteit | FHIR **of** JDBC (`patient_appointment`) | Reference distro zonder FHIR2 Appointment blijft testbaar |
+| Multi-tenant poll | `openmrs.fhir.organisations.*` | Meerdere FHIR-bronnen per tick (US-003) |
 | Retry | Max 3 pogingen, exponential backoff | `RabbitMqConsumerTest` + configureerbare `messaging.retry.*` |
 | Idempotentie | `notification_delivery_log` | Integratietest + geen dubbele publish; zie [TESTRAPPORTAGE.md](TESTRAPPORTAGE.md) |
 | Observability | `/actuator/prometheus`, Prometheus, Grafana | Throughput en latency reproduceerbaar uitleesbaar |
@@ -190,6 +212,11 @@ rate(spring_rabbitmq_listener_seconds_count{queue="queue.swiftsend"}[5m])
 rate(tasks_scheduled_execution_seconds_sum{code_function="checkDueNotifications"}[5m])
 /
 rate(tasks_scheduled_execution_seconds_count{code_function="checkDueNotifications"}[5m])
+
+# Appointment-poll (FHIR of JDBC)
+rate(tasks_scheduled_execution_seconds_sum{code_function="pollOpenmrsFhir"}[5m])
+/
+rate(tasks_scheduled_execution_seconds_count{code_function="pollOpenmrsFhir"}[5m])
 ```
 
 ### Belastingtest herhalen (PowerShell)
@@ -208,9 +235,11 @@ Daarna opnieuw `/actuator/prometheus` scrapen of Grafana-dashboard raadplegen.
 ### Database-controle
 
 ```powershell
-docker exec comm-module-db psql -U openmrs_user -d openmrs -c `
+docker exec comm-module-db psql -U comm_user -d comm_module -c `
   "SELECT status, COUNT(*) FROM notification_delivery_log GROUP BY status;"
 ```
+
+Gebruik de waarden uit uw `.env` (`POSTGRES_USER`, `POSTGRES_DB`).
 
 ---
 
@@ -220,12 +249,13 @@ docker exec comm-module-db psql -U openmrs_user -d openmrs -c `
 |-----------|-------------|
 | Geen dedicated JMeter/Gatling-suite | Metingen zijn kortstondige lokale load + Micrometer |
 | Fake provider ≠ productie-SMS | Absolute latency in productie hoger; relatieve verbetering (async + retry) blijft geldig |
+| Poll-cijfers FHIR vs JDBC | Enqueue/consumer/scheduler uit 21-05; JDBC-poll niet opnieuw gemeten — herhaal met `poll-mode=jdbc` voor actuele poll-latency |
 | Custom business-metrics | Backlog [US-015](docs/technische-backlog.md): aparte counters verzonden/mislukt — nu vooral Spring/Micrometer standaardmetrics |
 
-Aanbevolen vervolg voor productie: periodieke scrape in Grafana, alerts op DLQ-diepte en stijgende `spring_rabbitmq_listener_seconds` p95.
+Aanbevolen vervolg voor productie: periodieke scrape in Grafana, alerts op DLQ-diepte en stijgende `spring_rabbitmq_listener_seconds` p95; bij JDBC-poll ook MariaDB-latency monitoren.
 
 ---
 
 ## Conclusie
 
-Onder lokale belasting verwerkt de module **honderden enqueue-requests per seconde** en **tientallen volledige provider-berichten per seconde** per queue, met **submillisecond enqueue** en **~80 ms gemiddelde provider-roundtrip** naar de test-API. De **scheduler blijft in de milliseconden**, los van provider-latency. Ten opzichte van een synchroon ontwerp zijn **ontkoppeling, retry, idempotentie en observability** aantoonbaar ingevoerd — dat ondersteunt betrouwbaarheid voor de beoogde herinnerings-workload.
+Onder lokale belasting verwerkt de module **honderden enqueue-requests per seconde** en **tientallen volledige provider-berichten per seconde** per queue, met **submillisecond enqueue** en **~80 ms gemiddelde provider-roundtrip** naar de test-API. De **scheduler blijft in de milliseconden**, los van provider-latency. Ten opzichte van een synchroon ontwerp zijn **ontkoppeling, retry, idempotentie, dubbele poll-modi en observability** aantoonbaar ingevoerd — dat ondersteunt betrouwbaarheid voor de beoogde herinnerings-workload.

@@ -1,6 +1,6 @@
 # Testrapportage — OpenMRS Communicatiemodule
 
-Versie 1.0 | Sprint 3 | Meting: 21 mei 2026
+Versie 1.1 | Sprint 3 | Meting: 22 mei 2026
 
 Deze rapportage beschrijft hoe de **kernlogica** van de module is afgedekt met geautomatiseerde tests en hoe de **werking lokaal** kan worden aangetoond. Het sluit aan op deliverable 6 uit [docs/sprint3-doelen.txt](docs/sprint3-doelen.txt).
 
@@ -10,10 +10,10 @@ Deze rapportage beschrijft hoe de **kernlogica** van de module is afgedekt met g
 
 | Indicator | Resultaat |
 |-----------|-----------|
-| Totaal aantal tests | **106** |
-| Geslaagd / mislukt / overgeslagen | **106 / 0 / 0** |
+| Totaal aantal tests | **141** |
+| Geslaagd / mislukt / overgeslagen | **141 / 0 / 0** |
 | Build | `mvnw test` — **BUILD SUCCESS** (~20 s) |
-| Integratietests (Spring Boot + H2/Postgres-testcontext) | **13** tests in 5 klassen |
+| Integratietests (`@SpringBootTest`) | **22** tests in **7** klassen |
 | Provider-adapter unit-tests | **20** tests (4 providers) |
 
 ---
@@ -22,9 +22,9 @@ Deze rapportage beschrijft hoe de **kernlogica** van de module is afgedekt met g
 
 | Laag | Doel | Techniek |
 |------|------|----------|
-| **Unit** | Geïsoleerde businesslogica (scheduler, publisher, providers, consumer) | JUnit 5 + Mockito |
-| **Integratie** | Scheduler + delivery log + DB + publisher in één Spring-context | `@SpringBootTest`, vaste `Clock`, gemockte FHIR/RabbitMQ waar nodig |
-| **Lokaal handmatig** | End-to-end keten in Docker (OpenMRS → FHIR → poll → scheduler → queue → fake provider) | Compose-stack, test-GUI, [docs/docker-scheduling-test.md](docs/docker-scheduling-test.md) |
+| **Unit** | Geïsoleerde businesslogica (scheduler, publisher, providers, consumer, poll-config) | JUnit 5 + Mockito |
+| **Integratie** | Scheduler + delivery log + DB + publisher + poll-persistentie in één Spring-context | `@SpringBootTest`, vaste `Clock`, gemockte FHIR/RabbitMQ/JDBC waar nodig |
+| **Lokaal handmatig** | End-to-end keten in Docker (distro-afspraak → poll → scheduler → queue → fake provider) | Compose + distro, logmonitor, [docs/docker-scheduling-test.md](docs/docker-scheduling-test.md) |
 
 Automatische tests draaien zonder externe OpenMRS/FHIR/RabbitMQ (test-`application.properties` schakelt scheduler-listeners en Rabbit auto-startup uit waar nodig).
 
@@ -50,13 +50,13 @@ De scheduler (`NotificationScheduler`) roept periodiek `DueNotificationProcessor
 
 ### Integratie — scheduling-flow
 
-| Klasse | Test | Validatie |
-|--------|------|-----------|
-| `AppointmentReminderSchedulingIntegrationTest` | `processorZetAppointmentIn24uVensterOpQueue` | Afspraak in venster → één RabbitMQ-publish + `QUEUED` in delivery log |
-| | `tweedeSchedulerTickQueueNietOpnieuwNaEerstePoging` | **Idempotentie:** twee scheduler-ticks → nog steeds **één** publish |
-| | `schedulerTickMetUitgeschakeldeSchedulerQueueNiets` | Scheduler uit → geen publish |
-| `AppointmentReminder1HourSchedulingIntegrationTest` | 1u-herinnering in venster | Aparte lead (1 uur) werkt naast 24u |
-| `AppointmentCancellationIntegrationTest` | Geannuleerde afspraak | Geen herinnering na void/cancel |
+| Klasse | Tests | Validatie |
+|--------|-------|-----------|
+| `AppointmentReminderSchedulingIntegrationTest` | 3 | Afspraak in 24u-venster → publish + `QUEUED`; **idempotentie** bij tweede tick; scheduler uit → geen publish |
+| `AppointmentReminder1HourSchedulingIntegrationTest` | 2 | Aparte 1u-lead naast 24u |
+| `AppointmentCancellationIntegrationTest` | 2 | Geannuleerde/voided afspraak → geen herinnering |
+| `AppointmentReminderQueryServiceTest` | 5 | Query op venster en eligibility (Spring + DB) |
+| `NotificationDeliveryLogServiceTest` | 3 | Delivery-log gedrag in context |
 
 **Lokaal aantonen:** [docs/docker-scheduling-test.md](docs/docker-scheduling-test.md) — scheduler-tick in logs, delivery log `QUEUED` → `SENT`, tweede tick zonder dubbele queue.
 
@@ -108,17 +108,46 @@ Idempotentie voorkomt dubbele herinneringen voor dezelfde afspraak en berichttyp
 
 ### Unit — publisher en delivery log
 
-| Klasse | Relevante tests |
-|--------|-----------------|
-| `AppointmentReminderPublisherTest` | Dubbele publish voorkomen; 1u nog wel na succesvolle 24u |
-| `NotificationDeliveryLogServiceTest` | `hasSuccessfulDelivery` na SENT; mislukte poging telt niet als succes |
-| `AppointmentReminderEligibilityServiceTest` | Begonnen/geannuleerde afspraken niet opnieuw in aanmerking |
+| Klasse | Tests | Relevante validatie |
+|--------|-------|---------------------|
+| `AppointmentReminderPublisherTest` | 5 | Dubbele publish voorkomen; 1u nog wel na succesvolle 24u |
+| `NotificationDeliveryLogServiceTest` | 3 | `hasSuccessfulDelivery` na SENT; mislukte poging telt niet als succes |
+| `AppointmentReminderEligibilityServiceTest` | 4 | Begonnen/geannuleerde afspraken niet opnieuw in aanmerking |
 
 ### Integratie
 
 `AppointmentReminderSchedulingIntegrationTest.tweedeSchedulerTickQueueNietOpnieuwNaEerstePoging` — expliciete regressietest voor dubbele scheduler-runs.
 
-**Lokaal aantonen:** [docs/docker-scheduling-test.md](docs/docker-scheduling-test.md) — sectie *Tweede scheduler-tick (idempotentie)*: na tweede minuut `div class="0 in venster"` of geen tweede `QUEUED` voor hetzelfde appointment.
+**Lokaal aantonen:** [docs/docker-scheduling-test.md](docs/docker-scheduling-test.md) — na tweede scheduler-tick geen tweede `QUEUED` voor hetzelfde appointment; logmonitor toont vensterstatus en `sent`.
+
+---
+
+## 4. Appointment-poll (FHIR en JDBC)
+
+Poll-logica staat in `OpenmrsFhirPollingService` + `AppointmentPollSource` (FHIR R5 of JDBC `patient_appointment`).
+
+| Klasse | Tests | Validatie |
+|--------|-------|-----------|
+| `JpaAppointmentPollPersistenceTest` | 6 | Upsert, exclusies, organisatie-scope in DB |
+| `OpenmrsPollOrganisationScopeTest` | 2 | Actieve bronnen per organisatie |
+| `OpenmrsFhirPropertiesTest` | 5 | Multi-org intervals, `resolveActiveConnections` |
+| `AppointmentFhirMapperTest` | 8 | FHIR → intern DTO |
+| `PatientFhirMapperTest` | 2 | Patient/telefoon mapping |
+| `OpenmrsFhirAppointmentMetadataTest` | 2 | OpenMRS-specifieke FHIR-metadata |
+| `RetryingOpenmrsFhirOperationsTest` | 3 | Retry bij tijdelijke FHIR-fouten |
+
+**Lokaal aantonen:** logmonitor — sectie *Laatste poll* (diagnostics), *Polled appointments*; bij JDBC-poll bron = MariaDB-URL, geen FHIR-metadata-call.
+
+---
+
+## 5. Herinneringstekst en annuleringen
+
+| Klasse | Tests | Validatie |
+|--------|-------|-----------|
+| `DefaultAppointmentNotificationContentProviderTest` | 4 | Nederlandse body, lead-spec (24u/1u), instructies |
+| `AppointmentReminderMessageBuilderTest` | 2 | Berichtpayload voor queue |
+| `CancelledAppointmentNotificationServiceTest` | 4 | Geannuleerde afspraken: geen/on hold notificatie |
+| `AppointmentWindowStatusResolverTest` | 1 | Vensterlabels in test-GUI |
 
 ---
 
@@ -126,9 +155,8 @@ Idempotentie voorkomt dubbele herinneringen voor dezelfde afspraak en berichttyp
 
 | Domein | Voorbeelden | Tests |
 |--------|-------------|-------|
-| FHIR-mapping / poll | `AppointmentFhirMapperTest`, `JpaAppointmentPollPersistenceTest`, `RetryingOpenmrsFhirOperationsTest` | 16 |
-| Berichtopbouw / query | `AppointmentReminderMessageBuilderTest`, `AppointmentReminderQueryServiceTest` | 14 |
-| Config / security | `NotificationSchedulerPropertiesTest`, `AesEncryptionServiceTest`, `OpenmrsFhirTlsApacheHttpClientTest` | 11 |
+| Scheduling-sync / tijdzone | `OpenmrsSchedulingSyncPropertiesTest`, `OpenmrsSchedulingStatusMapperTest`, `OpenmrsFhirResourceFactoryTest` | 8 |
+| Config / security | `NotificationSchedulerPropertiesTest`, `OpenmrsFhirTlsApacheHttpClientTest`, `AesEncryptionServiceTest` | 12 |
 | Organisatie-API | `OrganisationConfigControllerTest`, `OrganisationConfigServiceTest` | 5 |
 | Context-load | `CommModuleApplicationTests` | 1 |
 
@@ -152,16 +180,16 @@ Rapporten (Surefire): `target/surefire-reports/`.
 
 | # | Stap | Verwacht resultaat |
 |---|------|-------------------|
-| 1 | `docker compose up -d --build` | `comm-module-app` **healthy** |
+| 1 | Distro + `docker compose up -d --build` | `comm-module-app` **healthy** |
 | 2 | `curl http://localhost:8081/actuator/health` | `{"status":"UP"}` |
 | 3 | POST `/api/notifications/test` | HTTP **202**, bericht op queue |
-| 4 | Scheduling-test volgens [docs/docker-scheduling-test.md](docs/docker-scheduling-test.md) | Delivery log: `QUEUED` → `SENT` |
+| 4 | Scheduling-test volgens [docs/docker-scheduling-test.md](docs/docker-scheduling-test.md) | Poll → `polled_appointment` → delivery log `QUEUED` → `SENT` |
 | 5 | Tweede scheduler-tick | Geen dubbele herinnering (idempotentie) |
 
-Optionele GUI: http://localhost:8081/test-scheduling.html
+Logmonitor: http://localhost:8081/test-scheduling.html (status, poll-diagnostics, polled appointments met venster/`sent`, delivery log).
 
 ---
 
 ## Conclusie
 
-De **scheduler**, **provider-adapters** en **idempotentie** zijn afgedekt met gerichte unit-tests en Spring-integratietests met vaste tijd (`Clock`) en gecontroleerde data. De **106** automatische tests slagen; de **Docker-stack** en het scheduling-testplan maken de keten lokaal reproduceerbaar voor beoordeling en beheerdersvalidatie.
+De **scheduler**, **provider-adapters**, **idempotentie**, **poll** (FHIR/JDBC) en **herinneringstekst** zijn afgedekt met unit- en Spring-integratietests. De **141** automatische tests slagen; de **Docker-stack** (JDBC-poll op reference distro) en het scheduling-testplan maken de keten lokaal reproduceerbaar.
