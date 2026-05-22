@@ -1,7 +1,6 @@
 package nl.openmrs.comm_module.scheduling;
 
 import nl.openmrs.comm_module.config.OpenmrsDataSourceProperties;
-import nl.openmrs.comm_module.config.OpenmrsFhirProperties;
 import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
 import nl.openmrs.comm_module.fhir.OpenmrsFhirOperationsFactory;
 import nl.openmrs.comm_module.fhir.OrganisationFhirConnection;
@@ -28,48 +27,36 @@ public class OpenmrsFhirPollingService {
     private final OpenmrsFhirOperationsFactory fhirOperationsFactory;
     private final AppointmentPollSource appointmentPollSource;
     private final AppointmentPollPersistence appointmentPollPersistence;
-    private final OpenmrsFhirProperties fhirProperties;
     private final PollDiagnosticsRecorder pollDiagnosticsRecorder;
     private final OpenmrsDataSourceProperties dataSourceProperties;
+    private final OpenmrsPollOrganisationScope pollOrganisationScope;
     private final String pollMode;
 
     public OpenmrsFhirPollingService(
             OpenmrsFhirOperationsFactory fhirOperationsFactory,
             AppointmentPollSource appointmentPollSource,
             AppointmentPollPersistence appointmentPollPersistence,
-            OpenmrsFhirProperties fhirProperties,
             PollDiagnosticsRecorder pollDiagnosticsRecorder,
             OpenmrsDataSourceProperties dataSourceProperties,
+            OpenmrsPollOrganisationScope pollOrganisationScope,
             @Value("${openmrs.fhir.poll-mode:fhir}") String pollMode) {
         this.fhirOperationsFactory = fhirOperationsFactory;
         this.appointmentPollSource = appointmentPollSource;
         this.appointmentPollPersistence = appointmentPollPersistence;
-        this.fhirProperties = fhirProperties;
         this.pollDiagnosticsRecorder = pollDiagnosticsRecorder;
         this.dataSourceProperties = dataSourceProperties;
+        this.pollOrganisationScope = pollOrganisationScope;
         this.pollMode = pollMode;
     }
 
     @Scheduled(fixedDelayString = "#{@openmrsFhirProperties.pollDelayMillis()}")
     public void pollOpenmrsFhir() {
         log.debug("OpenMRS FHIR poll gestart");
-        List<OrganisationFhirConnection> connections = fhirOperationsFactory.activeConnections();
+        List<OrganisationFhirConnection> connections = pollOrganisationScope.activePollConnections();
         Instant now = Instant.now();
         Instant to = AppointmentPollWindow.to(now);
 
         if (connections.isEmpty()) {
-            if ("jdbc".equalsIgnoreCase(pollMode) && dataSourceProperties.isConfigured()) {
-                OrganisationFhirConnection jdbcConnection =
-                        new OrganisationFhirConnection(
-                                fhirProperties.getOrganisationId(),
-                                "jdbc:openmrs",
-                                "",
-                                "",
-                                fhirProperties.getPollIntervalMinutes(),
-                                fhirProperties.getAppointmentPollSinceDays());
-                pollOrganisation(jdbcConnection, now, to);
-                return;
-            }
             log.warn("Geen actieve FHIR-bronnen geconfigureerd (openmrs.fhir.server-url of organisations.*)");
             return;
         }

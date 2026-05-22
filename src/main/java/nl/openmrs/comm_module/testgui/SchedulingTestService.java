@@ -145,6 +145,8 @@ public class SchedulingTestService {
                 schedulerProperties.getCheckIntervalMinutes(),
                 fhirProperties.getPollIntervalMinutes(),
                 schedulerProperties.getReminderZoneId(),
+                schedulingSyncProperties.effectiveDbZoneId().getId(),
+                schedulingSyncProperties.getZoneId(),
                 schedulerProperties.getDefaultProvider().name(),
                 Arrays.stream(MessagingProviderType.values()).map(Enum::name).toList(),
                 window24,
@@ -738,23 +740,7 @@ public class SchedulingTestService {
 
     private AppointmentWindowStatus resolveStatus(
             PolledAppointmentEntity a, Instant now, ReminderWindowDto window) {
-        if (a.isVoided()) {
-            return AppointmentWindowStatus.VOIDED;
-        }
-        Instant start = a.getAppointmentDatetime();
-        if (start == null || !start.isAfter(now)) {
-            return AppointmentWindowStatus.APPOINTMENT_PAST;
-        }
-        if (a.getPatientPhone() == null || a.getPatientPhone().isBlank()) {
-            return AppointmentWindowStatus.MISSING_PHONE;
-        }
-        if (start.isBefore(window.windowStart())) {
-            return AppointmentWindowStatus.TOO_EARLY;
-        }
-        if (!start.isBefore(window.windowEnd())) {
-            return AppointmentWindowStatus.TOO_LATE;
-        }
-        return AppointmentWindowStatus.IN_REMINDER_WINDOW;
+        return AppointmentReminderWindowStatusResolver.resolve(a, now, window);
     }
 
     private MessagePreviewDto toPreview(NotificationQueueMessage message) {

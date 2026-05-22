@@ -1,9 +1,8 @@
 package nl.openmrs.comm_module.notification;
 
 import nl.openmrs.comm_module.config.NotificationSchedulerProperties;
-import nl.openmrs.comm_module.fhir.OpenmrsFhirOperationsFactory;
-import nl.openmrs.comm_module.fhir.OrganisationFhirConnection;
 import nl.openmrs.comm_module.notification.reminder.AppointmentReminderSpec;
+import nl.openmrs.comm_module.scheduling.OpenmrsPollOrganisationScope;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
 import org.springframework.stereotype.Service;
@@ -19,19 +18,19 @@ import java.util.List;
 public class AppointmentReminderQueryService {
 
     private final PolledAppointmentRepository polledAppointmentRepository;
-    private final OpenmrsFhirOperationsFactory fhirOperationsFactory;
+    private final OpenmrsPollOrganisationScope pollOrganisationScope;
     private final NotificationSchedulerProperties schedulerProperties;
     private final AppointmentReminderEligibilityService eligibilityService;
     private final Clock clock;
 
     public AppointmentReminderQueryService(
             PolledAppointmentRepository polledAppointmentRepository,
-            OpenmrsFhirOperationsFactory fhirOperationsFactory,
+            OpenmrsPollOrganisationScope pollOrganisationScope,
             NotificationSchedulerProperties schedulerProperties,
             AppointmentReminderEligibilityService eligibilityService,
             Clock clock) {
         this.polledAppointmentRepository = polledAppointmentRepository;
-        this.fhirOperationsFactory = fhirOperationsFactory;
+        this.pollOrganisationScope = pollOrganisationScope;
         this.schedulerProperties = schedulerProperties;
         this.eligibilityService = eligibilityService;
         this.clock = clock;
@@ -51,9 +50,9 @@ public class AppointmentReminderQueryService {
         Instant windowEnd = target.plus(halfWindow);
 
         List<PolledAppointmentEntity> due = new ArrayList<>();
-        for (OrganisationFhirConnection connection : fhirOperationsFactory.activeConnections()) {
+        for (String organisationId : pollOrganisationScope.activeOrganisationIds()) {
             due.addAll(polledAppointmentRepository.findDueForReminderWindow(
-                    connection.organisationId(), now, windowStart, windowEnd));
+                    organisationId, now, windowStart, windowEnd));
         }
         return due.stream().filter(a -> eligibilityService.maySendReminder(a, now)).toList();
     }

@@ -46,9 +46,9 @@ public class JdbcPatientAppointmentPollSource implements AppointmentPollSource {
 
     @Override
     public List<AppointmentWithPatientDto> fetchBetween(String organisationId, Instant from, Instant to) {
-        ZoneId zone = ZoneId.of(schedulingProperties.getZoneId());
-        LocalDateTime fromLocal = LocalDateTime.ofInstant(from, zone);
-        LocalDateTime toLocal = LocalDateTime.ofInstant(to, zone);
+        final ZoneId dbZone = schedulingProperties.effectiveDbZoneId();
+        LocalDateTime fromLocal = LocalDateTime.ofInstant(from, dbZone);
+        LocalDateTime toLocal = LocalDateTime.ofInstant(to, dbZone);
 
         List<OpenmrsSchedulingAppointmentRow> rows =
                 appointmentRepository.findAppointmentsBetween(fromLocal, toLocal);
@@ -60,7 +60,7 @@ public class JdbcPatientAppointmentPollSource implements AppointmentPollSource {
         int mapped = 0;
         int skipped = 0;
         for (OpenmrsSchedulingAppointmentRow row : rows) {
-            AppointmentPollDto apt = toPollDto(row, zone);
+            AppointmentPollDto apt = toPollDto(row, dbZone);
             if (apt == null) {
                 skipped++;
                 continue;

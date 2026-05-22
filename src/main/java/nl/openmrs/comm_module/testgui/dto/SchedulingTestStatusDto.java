@@ -18,6 +18,10 @@ public record SchedulingTestStatusDto(
         int schedulerCheckIntervalMinutes,
         int fhirPollIntervalMinutes,
         String reminderZoneId,
+        /** Zone van naive start_date_time in MariaDB (meestal UTC bij reference distro). */
+        String appointmentDbZoneId,
+        /** Zone voor weergave van opgeslagen Instant (notificaties + test-GUI). */
+        String appointmentDisplayZoneId,
         String defaultProvider,
         List<String> availableProviders,
         ReminderWindowDto reminderWindow,
