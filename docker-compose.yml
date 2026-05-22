@@ -40,81 +40,6 @@ services:
       - comm-network
     restart: unless-stopped
 
-  # Standalone FHIR R5 (HL7 Appointment) — niet OpenMRS FHIR2
-  fhir-r5:
-    # Gebruik latest (Spring Boot), niet latest-tomcat: die kan ROOT.war niet uitpakken (rechten)
-    image: hapiproject/hapi:latest
-    container_name: comm-module-fhir-r5
-    volumes:
-      - ./docker/fhir-r5/application.yaml:/data/hapi/application.yaml:ro
-    environment:
-      SPRING_CONFIG_LOCATION: file:///data/hapi/application.yaml
-    ports:
-      - "8082:8080"
-    # Geen healthcheck: image heeft geen curl; seed/comm-module wachten zelf op metadata
-    networks:
-      - comm-network
-    restart: unless-stopped
-
-  fhir-r5-seed:
-    image: curlimages/curl:8.5.0
-    container_name: comm-module-fhir-r5-seed
-    depends_on:
-      fhir-r5:
-        condition: service_started
-    volumes:
-      - ./docker/fhir-r5:/seed:ro
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        set -e
-        BASE=http://fhir-r5:8080/fhir
-        echo "Wachten op FHIR R5 metadata..."
-        until curl -sf "$$BASE/metadata" >/dev/null; do sleep 10; done
-        curl -sf -X PUT "$$BASE/Patient/patient-docker-1" -H "Content-Type: application/fhir+json" --data-binary @/seed/seed-patient.json
-        curl -sf -X DELETE "$$BASE/Appointment/apt-docker-1" >/dev/null 2>&1 || true
-        echo "FHIR R5 seed klaar (alleen test-patient, geen vaste appointment)"
-    networks:
-      - comm-network
-    restart: "no"
-
-  openmrs:
-    build:
-      context: ./docker/openmrs
-      dockerfile: Dockerfile
-    # Lokale tag; niet op Docker Hub — bij module-wijziging: docker compose build openmrs
-    image: openmrs-comm-fhir:2.5.14-appointments
-    pull_policy: build
-    container_name: openmrs-server
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      OMRS_DB: postgresql
-      OMRS_DB_HOSTNAME: postgres
-      OMRS_DB_PORT: 5432
-      OMRS_DB_NAME: ${POSTGRES_DB:?Zie .env.example}
-      OMRS_DB_USERNAME: ${POSTGRES_USER:?Zie .env.example}
-      OMRS_DB_PASSWORD: ${POSTGRES_PASSWORD:?Zie .env.example}
-      OMRS_CREATE_TABLES: "true"
-      OMRS_AUTO_UPDATE_DATABASE: "true"
-      OMRS_ADMIN_USER_PASSWORD: ${OMRS_ADMIN_USER_PASSWORD:?Zie .env.example}
-    ports:
-      - "8080:8080"
-    volumes:
-      - openmrs_data:/openmrs/data
-    # Static asset voorkomt login/alert-tag errors in de OpenMRS logs.
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/openmrs/scripts/jquery/jquery.min.js"]
-      interval: 15s
-      timeout: 10s
-      retries: 20
-      start_period: 300s
-    networks:
-      - comm-network
-    restart: unless-stopped
-
   fakecomworld:
     image: ghcr.io/avansict/in2.4-fakecomworld:main
     container_name: fakecomworld
@@ -146,16 +71,13 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      # OpenMRS wordt pas minuten later "healthy"; comm-module mag al starten.
-      # FHIR: wacht op seed (die pollt tot /metadata bereikbaar is) — HAPI heeft 1–3 min nodig.
-      fhir-r5-seed:
-        condition: service_completed_successfully
-      openmrs:
-        condition: service_started
       otel-collector:
         condition: service_started
       fakecomworld:
         condition: service_started
+    # OpenMRS Reference Application draait apart op de host (poort 80)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?Zie .env.example}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?Zie .env.example}
@@ -164,14 +86,18 @@ services:
       SPRING_RABBITMQ_PORT: ${SPRING_RABBITMQ_PORT:?Zie .env.example}
       SPRING_RABBITMQ_USERNAME: ${SPRING_RABBITMQ_USERNAME:?Zie .env.example}
       SPRING_RABBITMQ_PASSWORD: ${SPRING_RABBITMQ_PASSWORD:?Zie .env.example}
-      # FHIR R5 REST-base (HAPI in compose); geen OpenMRS FHIR2-module nodig
-      OPENMRS_URL: ${OPENMRS_URL:?Zie .env.example}
-      OPENMRS_FHIR_SERVER_URL: ${OPENMRS_FHIR_SERVER_URL:?Zie .env.example}
+      OPENMRS_DATASOURCE_URL: ${OPENMRS_DATASOURCE_URL:-}
+      OPENMRS_DATASOURCE_USERNAME: ${OPENMRS_DATASOURCE_USERNAME:-}
+      OPENMRS_DATASOURCE_PASSWORD: ${OPENMRS_DATASOURCE_PASSWORD:-}
+      OPENMRS_SCHEDULING_SOURCE: ${OPENMRS_SCHEDULING_SOURCE:-legacy}
+      OPENMRS_FHIR_POLL_MODE: ${OPENMRS_FHIR_POLL_MODE:-fhir}
+      OPENMRS_FHIR_SERVER_URL: ${OPENMRS_FHIR_SERVER_URL:-}
       OPENMRS_FHIR_USERNAME: ${OPENMRS_FHIR_USERNAME:-}
       OPENMRS_FHIR_PASSWORD: ${OPENMRS_FHIR_PASSWORD:-}
       OPENMRS_FHIR_ORGANISATION_ID: ${OPENMRS_FHIR_ORGANISATION_ID:-default}
       OPENMRS_FHIR_POLL_INTERVAL_MINUTES: ${OPENMRS_FHIR_POLL_INTERVAL_MINUTES:-1}
-      OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED: ${OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED:-true}
+      OPENMRS_FHIR_APPOINTMENT_POLL_SINCE_DAYS: ${OPENMRS_FHIR_APPOINTMENT_POLL_SINCE_DAYS:-30}
+      OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED: ${OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED:-false}
       OPENMRS_SCHEDULING_FHIR_SYNC_INTERVAL_MINUTES: ${OPENMRS_SCHEDULING_FHIR_SYNC_INTERVAL_MINUTES:-1}
       OPENMRS_SCHEDULING_SYNC_ZONE: ${OPENMRS_SCHEDULING_SYNC_ZONE:-Europe/Amsterdam}
       OPENMRS_SCHEDULING_SYNC_FALLBACK_PHONE: ${OPENMRS_SCHEDULING_SYNC_FALLBACK_PHONE:-+31612345678}
@@ -195,7 +121,6 @@ services:
       MESSAGING_RETRY_INITIAL_DELAY_MS: ${MESSAGING_RETRY_INITIAL_DELAY_MS:-5000}
       MESSAGING_RETRY_MULTIPLIER: ${MESSAGING_RETRY_MULTIPLIER:-2}
       MESSAGING_RETRY_MAX_DELAY_MS: ${MESSAGING_RETRY_MAX_DELAY_MS:-60000}
-      # Default: service otel-collector (oude .env zonder deze key blijft werken)
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: ${MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT:-http://otel-collector:4318/v1/traces}
     ports:
       - "8081:8080"
@@ -248,7 +173,6 @@ services:
 volumes:
   postgres_data:
   rabbitmq_data:
-  openmrs_data:
   grafana_data:
 
 networks:

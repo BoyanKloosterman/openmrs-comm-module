@@ -1,3 +1,12 @@
+# OpenMRS Docker (verouderd — niet meer in compose)
+
+> **Let op:** OpenMRS draait niet meer in `docker-compose.yml` van dit project.
+> Gebruik de aparte stack [openmrs-distro-referenceapplication](https://github.com/openmrs/openmrs-distro-referenceapplication)
+> (`docker compose up` daar; UI op http://localhost/openmrs/spa, afspraken op `/spa/home/appointments`).
+> De comm-module pollt FHIR2 R5 op die distro (`OPENMRS_FHIR_SERVER_URL` in `.env`).
+
+De onderstaande documentatie blijft staan voor wie de oude lokale image nog handmatig bouwt.
+
 # OpenMRS Docker (Legacy UI + afspraken)
 
 ## Modules in de image

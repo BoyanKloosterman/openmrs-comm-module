@@ -88,6 +88,14 @@ public class SchedulingTestController {
         return testService.cancelAppointment(appointmentFhirId, runSyncAfter, runPollAfter);
     }
 
+    @GetMapping("/poll-diagnostics")
+    public ResponseEntity<PollDiagnosticsDto> pollDiagnostics() {
+        return testService
+                .lastPollDiagnostics()
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
+    }
+
     @PostMapping("/poll")
     public TriggerResultDto poll() {
         return testService.triggerPoll();

@@ -6,6 +6,7 @@ import nl.openmrs.comm_module.messaging.fhir.dto.PatientPollDto;
 import nl.openmrs.comm_module.notification.voided.VoidedAppointmentCoordinator;
 import nl.openmrs.comm_module.poll.AppointmentPollExclusionService;
 import nl.openmrs.comm_module.poll.AppointmentPollPersistence;
+import nl.openmrs.comm_module.poll.PollDiagnosticsRecorder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,32 +22,40 @@ public class JpaAppointmentPollPersistence implements AppointmentPollPersistence
     private final AppointmentPollExclusionService pollExclusionService;
     private final VoidedAppointmentCoordinator voidedAppointmentCoordinator;
     private final Clock clock;
+    private final PollDiagnosticsRecorder pollDiagnosticsRecorder;
 
     public JpaAppointmentPollPersistence(
             PolledAppointmentRepository repository,
             PolledAppointmentExclusionRepository exclusionRepository,
             AppointmentPollExclusionService pollExclusionService,
             VoidedAppointmentCoordinator voidedAppointmentCoordinator,
-            Clock clock) {
+            Clock clock,
+            PollDiagnosticsRecorder pollDiagnosticsRecorder) {
         this.repository = repository;
         this.exclusionRepository = exclusionRepository;
         this.pollExclusionService = pollExclusionService;
         this.voidedAppointmentCoordinator = voidedAppointmentCoordinator;
         this.clock = clock;
+        this.pollDiagnosticsRecorder = pollDiagnosticsRecorder;
     }
 
     @Override
     @Transactional
     public void upsertPollResults(String organisationId, List<AppointmentWithPatientDto> appointmentsWithPatients) {
         Instant now = clock.instant();
+        int saved = 0;
+        int skippedPast = 0;
+        int skippedExcluded = 0;
         for (AppointmentWithPatientDto row : appointmentsWithPatients) {
             AppointmentPollDto a = row.appointment();
             if (exclusionRepository.existsByOrganisationIdAndAppointmentFhirId(
                     organisationId, a.appointmentId())) {
+                skippedExcluded++;
                 continue;
             }
             if (isPastAppointment(a, now)) {
                 pollExclusionService.excludeIfAbsent(organisationId, a.appointmentId(), now);
+                skippedPast++;
                 continue;
             }
             PolledAppointmentEntity entity = repository
@@ -55,9 +64,11 @@ public class JpaAppointmentPollPersistence implements AppointmentPollPersistence
             boolean wasVoidedBefore = entity.getId() != null && entity.isVoided();
             applyAppointment(entity, organisationId, a, row.patient(), now);
             repository.save(entity);
+            saved++;
             voidedAppointmentCoordinator.notifyIfVoided(entity, wasVoidedBefore);
         }
         excludePastStillStored(organisationId, now);
+        pollDiagnosticsRecorder.addPersistStats(saved, skippedPast, skippedExcluded);
     }
 
     /** Bestaande DB-rijen die inmiddels voorbij zijn: uitsluiten zonder opnieuw te upserten. */

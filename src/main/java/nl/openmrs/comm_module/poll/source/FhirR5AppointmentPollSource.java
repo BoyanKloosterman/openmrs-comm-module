@@ -7,9 +7,11 @@ import nl.openmrs.comm_module.messaging.fhir.PatientFhirMapper;
 import nl.openmrs.comm_module.messaging.fhir.dto.AppointmentPollDto;
 import nl.openmrs.comm_module.messaging.fhir.dto.AppointmentWithPatientDto;
 import nl.openmrs.comm_module.messaging.fhir.dto.PatientPollDto;
+import nl.openmrs.comm_module.poll.PollDiagnosticsRecorder;
 import org.hl7.fhir.r5.model.Appointment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -22,6 +24,7 @@ import java.util.Optional;
 
 /** US-003: FHIR R5 Appointment + Patient ophalen en mappen per organisatie. */
 @Component
+@ConditionalOnProperty(name = "openmrs.fhir.poll-mode", havingValue = "fhir", matchIfMissing = true)
 public class FhirR5AppointmentPollSource implements AppointmentPollSource {
 
     private static final Logger log = LoggerFactory.getLogger(FhirR5AppointmentPollSource.class);
@@ -30,23 +33,29 @@ public class FhirR5AppointmentPollSource implements AppointmentPollSource {
     private final AppointmentFhirMapper appointmentFhirMapper;
     private final PatientFhirMapper patientFhirMapper;
     private final Clock clock;
+    private final PollDiagnosticsRecorder pollDiagnosticsRecorder;
 
     public FhirR5AppointmentPollSource(
             OpenmrsFhirOperationsFactory fhirOperationsFactory,
             AppointmentFhirMapper appointmentFhirMapper,
             PatientFhirMapper patientFhirMapper,
-            Clock clock) {
+            Clock clock,
+            PollDiagnosticsRecorder pollDiagnosticsRecorder) {
         this.fhirOperationsFactory = fhirOperationsFactory;
         this.appointmentFhirMapper = appointmentFhirMapper;
         this.patientFhirMapper = patientFhirMapper;
         this.clock = clock;
+        this.pollDiagnosticsRecorder = pollDiagnosticsRecorder;
     }
 
     @Override
     public List<AppointmentWithPatientDto> fetchBetween(String organisationId, Instant from, Instant to) {
         OpenmrsFhirOperations fhirOperations = fhirOperationsFactory.forOrganisation(organisationId);
         List<Appointment> raw = fhirOperations.searchAppointmentsBetween(from, to);
+        int rawCount = raw == null ? 0 : raw.size();
+        pollDiagnosticsRecorder.setFhirRawCount(rawCount);
         List<AppointmentPollDto> snapshots = mapAppointments(raw);
+        pollDiagnosticsRecorder.setMappedCounts(snapshots.size(), Math.max(0, rawCount - snapshots.size()));
         return attachPatients(organisationId, snapshots, fhirOperations);
     }
 

@@ -10,6 +10,9 @@ public class OpenmrsSchedulingSyncProperties {
 
     private boolean enabled = true;
 
+    /** legacy = appointmentscheduling_* ; patient-appointment = SPA reference distro. */
+    private String source = "legacy";
+
     private int intervalMinutes = 1;
 
     /** Interpretatie van naive timestamps uit OpenMRS (time_slot.start_date). */
@@ -32,6 +35,18 @@ public class OpenmrsSchedulingSyncProperties {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source != null ? source.trim() : "legacy";
+    }
+
+    public boolean isPatientAppointmentSource() {
+        return "patient-appointment".equalsIgnoreCase(source);
     }
 
     public int getIntervalMinutes() {

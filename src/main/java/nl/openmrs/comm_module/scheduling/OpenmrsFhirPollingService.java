@@ -1,15 +1,18 @@
 package nl.openmrs.comm_module.scheduling;
 
+import nl.openmrs.comm_module.config.OpenmrsDataSourceProperties;
 import nl.openmrs.comm_module.config.OpenmrsFhirProperties;
 import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
 import nl.openmrs.comm_module.fhir.OpenmrsFhirOperationsFactory;
 import nl.openmrs.comm_module.fhir.OrganisationFhirConnection;
 import nl.openmrs.comm_module.messaging.fhir.dto.AppointmentWithPatientDto;
 import nl.openmrs.comm_module.poll.AppointmentPollPersistence;
+import nl.openmrs.comm_module.poll.PollDiagnosticsRecorder;
 import nl.openmrs.comm_module.poll.source.AppointmentPollSource;
 import nl.openmrs.comm_module.poll.source.AppointmentPollWindow;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -26,29 +29,50 @@ public class OpenmrsFhirPollingService {
     private final AppointmentPollSource appointmentPollSource;
     private final AppointmentPollPersistence appointmentPollPersistence;
     private final OpenmrsFhirProperties fhirProperties;
+    private final PollDiagnosticsRecorder pollDiagnosticsRecorder;
+    private final OpenmrsDataSourceProperties dataSourceProperties;
+    private final String pollMode;
 
     public OpenmrsFhirPollingService(
             OpenmrsFhirOperationsFactory fhirOperationsFactory,
             AppointmentPollSource appointmentPollSource,
             AppointmentPollPersistence appointmentPollPersistence,
-            OpenmrsFhirProperties fhirProperties) {
+            OpenmrsFhirProperties fhirProperties,
+            PollDiagnosticsRecorder pollDiagnosticsRecorder,
+            OpenmrsDataSourceProperties dataSourceProperties,
+            @Value("${openmrs.fhir.poll-mode:fhir}") String pollMode) {
         this.fhirOperationsFactory = fhirOperationsFactory;
         this.appointmentPollSource = appointmentPollSource;
         this.appointmentPollPersistence = appointmentPollPersistence;
         this.fhirProperties = fhirProperties;
+        this.pollDiagnosticsRecorder = pollDiagnosticsRecorder;
+        this.dataSourceProperties = dataSourceProperties;
+        this.pollMode = pollMode;
     }
 
     @Scheduled(fixedDelayString = "#{@openmrsFhirProperties.pollDelayMillis()}")
     public void pollOpenmrsFhir() {
         log.debug("OpenMRS FHIR poll gestart");
         List<OrganisationFhirConnection> connections = fhirOperationsFactory.activeConnections();
+        Instant now = Instant.now();
+        Instant to = AppointmentPollWindow.to(now);
+
         if (connections.isEmpty()) {
+            if ("jdbc".equalsIgnoreCase(pollMode) && dataSourceProperties.isConfigured()) {
+                OrganisationFhirConnection jdbcConnection =
+                        new OrganisationFhirConnection(
+                                fhirProperties.getOrganisationId(),
+                                "jdbc:openmrs",
+                                "",
+                                "",
+                                fhirProperties.getPollIntervalMinutes(),
+                                fhirProperties.getAppointmentPollSinceDays());
+                pollOrganisation(jdbcConnection, now, to);
+                return;
+            }
             log.warn("Geen actieve FHIR-bronnen geconfigureerd (openmrs.fhir.server-url of organisations.*)");
             return;
         }
-
-        Instant now = Instant.now();
-        Instant to = AppointmentPollWindow.to(now);
 
         for (OrganisationFhirConnection connection : connections) {
             pollOrganisation(connection, now, to);
@@ -57,12 +81,16 @@ public class OpenmrsFhirPollingService {
 
     private void pollOrganisation(OrganisationFhirConnection connection, Instant now, Instant to) {
         String orgId = connection.organisationId();
+        Instant from = AppointmentPollWindow.from(now, connection.appointmentPollSinceDays());
+        String pollLabel = resolvePollLabel(connection);
+        pollDiagnosticsRecorder.begin(orgId, pollLabel, from, to);
         try {
-            OpenmrsFhirOperations fhirOperations = fhirOperationsFactory.forOrganisation(orgId);
-            String info = fhirOperations.fetchServerSoftwareNameAndVersion();
-            log.info("FHIR server (org={}): {}", orgId, info);
-
-            Instant from = AppointmentPollWindow.from(now, connection.appointmentPollSinceDays());
+            if (!"jdbc".equalsIgnoreCase(pollMode)) {
+                OpenmrsFhirOperations fhirOperations = fhirOperationsFactory.forOrganisation(orgId);
+                String info = fhirOperations.fetchServerSoftwareNameAndVersion();
+                pollDiagnosticsRecorder.setFhirServerInfo(info);
+                log.info("FHIR server (org={}): {}", orgId, info);
+            }
             List<AppointmentWithPatientDto> withPatients =
                     appointmentPollSource.fetchBetween(orgId, from, to);
 
@@ -77,13 +105,22 @@ public class OpenmrsFhirPollingService {
 
             appointmentPollPersistence.upsertPollResults(orgId, withPatients);
         } catch (RuntimeException e) {
+            String msg = shortMessage(e);
+            pollDiagnosticsRecorder.setError(msg);
             log.error(
                     "OpenMRS FHIR poll mislukt org={} ({}): {}",
                     orgId,
                     e.getClass().getSimpleName(),
-                    shortMessage(e),
+                    msg,
                     e);
         }
+    }
+
+    private String resolvePollLabel(OrganisationFhirConnection connection) {
+        if ("jdbc".equalsIgnoreCase(pollMode) && dataSourceProperties.isConfigured()) {
+            return dataSourceProperties.getUrl().trim();
+        }
+        return connection.serverUrl();
     }
 
     private static String shortMessage(Throwable t) {

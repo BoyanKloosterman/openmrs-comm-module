@@ -1,6 +1,7 @@
 package nl.openmrs.comm_module.testgui;
 
 import nl.openmrs.comm_module.config.NotificationSchedulerProperties;
+import nl.openmrs.comm_module.config.OpenmrsDataSourceProperties;
 import nl.openmrs.comm_module.config.OpenmrsFhirProperties;
 import nl.openmrs.comm_module.config.OpenmrsSchedulingSyncProperties;
 import nl.openmrs.comm_module.fhir.OpenmrsFhirOperations;
@@ -17,12 +18,15 @@ import nl.openmrs.comm_module.notification.NotificationDeliveryLogService;
 import nl.openmrs.comm_module.notification.persistence.NotificationDeliveryLogEntity;
 import nl.openmrs.comm_module.notification.persistence.NotificationDeliveryLogRepository;
 import nl.openmrs.comm_module.poll.AppointmentPollExclusionService;
+import nl.openmrs.comm_module.poll.PollDiagnosticsRecorder;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
+import nl.openmrs.comm_module.poll.source.AppointmentPollWindow;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
 import nl.openmrs.comm_module.scheduling.OpenmrsFhirPollingService;
 import nl.openmrs.comm_module.scheduling.OpenmrsSchedulingFhirSyncService;
 import nl.openmrs.comm_module.testgui.dto.*;
 import org.hl7.fhir.r5.model.Appointment;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,6 +68,9 @@ public class SchedulingTestService {
     private final PolledAppointmentRepository polledAppointmentRepository;
     private final AppointmentPollExclusionService pollExclusionService;
     private final NotificationDeliveryLogRepository deliveryLogRepository;
+    private final PollDiagnosticsRecorder pollDiagnosticsRecorder;
+    private final OpenmrsDataSourceProperties dataSourceProperties;
+    private final String pollMode;
 
     public SchedulingTestService(
             Clock clock,
@@ -81,7 +88,10 @@ public class SchedulingTestService {
             NotificationDeliveryLogService deliveryLogService,
             PolledAppointmentRepository polledAppointmentRepository,
             AppointmentPollExclusionService pollExclusionService,
-            NotificationDeliveryLogRepository deliveryLogRepository) {
+            NotificationDeliveryLogRepository deliveryLogRepository,
+            PollDiagnosticsRecorder pollDiagnosticsRecorder,
+            OpenmrsDataSourceProperties dataSourceProperties,
+            @Value("${openmrs.fhir.poll-mode:fhir}") String pollMode) {
         this.clock = clock;
         this.fhirProperties = fhirProperties;
         this.schedulerProperties = schedulerProperties;
@@ -98,6 +108,9 @@ public class SchedulingTestService {
         this.polledAppointmentRepository = polledAppointmentRepository;
         this.pollExclusionService = pollExclusionService;
         this.deliveryLogRepository = deliveryLogRepository;
+        this.pollDiagnosticsRecorder = pollDiagnosticsRecorder;
+        this.dataSourceProperties = dataSourceProperties;
+        this.pollMode = pollMode;
     }
 
     public SchedulingTestStatusDto status() {
@@ -108,9 +121,16 @@ public class SchedulingTestService {
         AppointmentReminderSpec spec1 = requireSpec(ReminderKind.H1);
         List<PolledAppointmentEntity> due24 = reminderQueryService.findAppointmentsDueFor(spec24);
         List<PolledAppointmentEntity> due1 = reminderQueryService.findAppointmentsDueFor(spec1);
+        Instant pollFrom = AppointmentPollWindow.from(now, fhirProperties);
+        Instant pollTo = AppointmentPollWindow.to(now);
         return new SchedulingTestStatusDto(
                 now,
                 fhirProperties.getOrganisationId(),
+                resolvePollSourceLabel(),
+                schedulingSyncProperties.isEnabled(),
+                fhirProperties.getAppointmentPollSinceDays(),
+                pollFrom,
+                pollTo,
                 schedulerProperties.isEnabled(),
                 schedulerProperties.getReminderLeadHours(),
                 schedulerProperties.getReminder1LeadHours(),
@@ -123,7 +143,12 @@ public class SchedulingTestService {
                 window24,
                 due24.size(),
                 window1,
-                due1.size());
+                due1.size(),
+                pollDiagnosticsRecorder.getLast().orElse(null));
+    }
+
+    public Optional<PollDiagnosticsDto> lastPollDiagnostics() {
+        return pollDiagnosticsRecorder.getLast();
     }
 
     public List<OpenmrsPatientOptionDto> listOpenmrsPatients() {
@@ -335,10 +360,19 @@ public class SchedulingTestService {
     public TriggerResultDto triggerPoll() {
         try {
             pollingService.pollOpenmrsFhir();
-            return new TriggerResultDto(true, "FHIR-poll voltooid");
+            return buildPollResult();
         } catch (RuntimeException e) {
-            return new TriggerResultDto(false, e.getMessage());
+            return new TriggerResultDto(false, e.getMessage(), pollDiagnosticsRecorder.getLast().orElse(null));
         }
+    }
+
+    private TriggerResultDto buildPollResult() {
+        PollDiagnosticsDto diagnostics = pollDiagnosticsRecorder.getLast().orElse(null);
+        if (diagnostics == null) {
+            return new TriggerResultDto(false, "Geen FHIR-bron geconfigureerd (openmrs.fhir.server-url)", null);
+        }
+        String message = diagnostics.summary();
+        return new TriggerResultDto(diagnostics.success(), message, diagnostics);
     }
 
     public SchedulerRunResultDto triggerScheduler(String fallbackProviderName, ReminderKind kind) {
@@ -506,6 +540,17 @@ public class SchedulingTestService {
             }
         }
         return message;
+    }
+
+    private String resolvePollSourceLabel() {
+        String url = fhirProperties.getServerUrl();
+        if (url != null && !url.isBlank()) {
+            return url.trim();
+        }
+        if ("jdbc".equalsIgnoreCase(pollMode) && dataSourceProperties.isConfigured()) {
+            return dataSourceProperties.getUrl().trim();
+        }
+        return "";
     }
 
     private static LocalDateTime parseAppointmentStartUtc(String appointmentStart) {

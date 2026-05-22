@@ -15,8 +15,8 @@ public final class OpenmrsSchedulingStatusMapper {
             return Appointment.AppointmentStatus.BOOKED;
         }
         return switch (openmrsStatus.trim().toUpperCase()) {
-            case "SCHEDULED", "WALKIN", "WAITING" -> Appointment.AppointmentStatus.BOOKED;
-            case "INCONSULTATION" -> Appointment.AppointmentStatus.ARRIVED;
+            case "SCHEDULED", "WALKIN", "WAITING", "CHECKEDIN", "CHECKED-IN" -> Appointment.AppointmentStatus.BOOKED;
+            case "INCONSULTATION", "IN_CONSULTATION" -> Appointment.AppointmentStatus.ARRIVED;
             case "COMPLETED" -> Appointment.AppointmentStatus.FULFILLED;
             case "CANCELLED" -> Appointment.AppointmentStatus.CANCELLED;
             case "MISSED" -> Appointment.AppointmentStatus.NOSHOW;

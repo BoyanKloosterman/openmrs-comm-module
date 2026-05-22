@@ -1,5 +1,8 @@
 package nl.openmrs.comm_module.testgui;
 
+import nl.openmrs.comm_module.config.OpenmrsSchedulingSyncProperties;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -101,6 +104,36 @@ public class OpenmrsSchedulingTestRepository {
             WHERE retired = false AND trim(uuid) = ?
             """;
 
+    private static final String SELECT_PATIENT_APPOINTMENTS =
+            """
+            SELECT
+              pa.patient_appointment_id AS appointment_id,
+              upper(trim(pa.status)) AS status,
+              coalesce(pa.voided, 0) AS voided,
+              pa.start_date_time AS start_date,
+              pa.end_date_time AS end_date,
+              trim(coalesce(pn.given_name, '')) AS given_name,
+              trim(coalesce(pn.family_name, '')) AS family_name,
+              trim(per.uuid) AS patient_uuid,
+              trim(l.uuid) AS location_uuid,
+              trim(l.name) AS location_name,
+              trim(coalesce(ast.name, asvc.name, '')) AS type_name,
+              trim(coalesce(pa.comments, '')) AS reason
+            FROM patient_appointment pa
+            JOIN patient p ON pa.patient_id = p.patient_id
+            JOIN person per ON p.patient_id = per.person_id
+            JOIN person_name pn
+              ON per.person_id = pn.person_id AND pn.preferred = true AND pn.voided = false
+            LEFT JOIN location l ON pa.location_id = l.location_id
+            LEFT JOIN appointment_service_type ast
+              ON pa.appointment_service_type_id = ast.appointment_service_type_id
+            LEFT JOIN appointment_service asvc
+              ON pa.appointment_service_id = asvc.appointment_service_id
+            WHERE (? = true OR coalesce(pa.voided, 0) = false)
+            ORDER BY pa.start_date_time DESC
+            LIMIT ?
+            """;
+
     private static final String SELECT_APPOINTMENTS =
             """
             SELECT
@@ -163,9 +196,14 @@ public class OpenmrsSchedulingTestRepository {
             """;
 
     private final JdbcTemplate jdbcTemplate;
+    private final OpenmrsSchedulingSyncProperties schedulingProperties;
 
-    public OpenmrsSchedulingTestRepository(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+    public OpenmrsSchedulingTestRepository(
+            JdbcTemplate jdbcTemplate,
+            OpenmrsSchedulingSyncProperties schedulingProperties,
+            @Autowired(required = false) @Qualifier("openmrsJdbcTemplate") JdbcTemplate openmrsJdbcTemplate) {
+        this.schedulingProperties = schedulingProperties;
+        this.jdbcTemplate = openmrsJdbcTemplate != null ? openmrsJdbcTemplate : jdbcTemplate;
     }
 
     public List<OpenmrsLocationRow> listLocations(int limit) {
@@ -236,11 +274,12 @@ public class OpenmrsSchedulingTestRepository {
     }
 
     public List<OpenmrsAppointmentListRow> listAppointments(int limit, boolean includeVoided) {
+        String sql =
+                schedulingProperties.isPatientAppointmentSource()
+                        ? SELECT_PATIENT_APPOINTMENTS
+                        : SELECT_APPOINTMENTS;
         return jdbcTemplate.query(
-                SELECT_APPOINTMENTS,
-                APPOINTMENT_LIST_ROW_MAPPER,
-                includeVoided,
-                Math.max(1, limit));
+                sql, APPOINTMENT_LIST_ROW_MAPPER, includeVoided, Math.max(1, limit));
     }
 
     public Optional<OpenmrsAppointmentDetailRow> findAppointmentById(int openmrsAppointmentId) {
