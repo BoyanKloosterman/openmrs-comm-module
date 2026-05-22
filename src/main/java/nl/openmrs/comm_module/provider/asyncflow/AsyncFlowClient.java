@@ -10,24 +10,24 @@ import org.springframework.web.client.RestClientResponseException;
 public class AsyncFlowClient {
 
     private final RestClient restClient;
-    private final String apiKey;
     private final String studentGroup;
 
     public AsyncFlowClient(
             RestClient.Builder restClientBuilder,
             @Value("${providers.base-url}") String providersBaseUrl,
-            @Value("${providers.asyncflow.api-key}") String apiKey,
             @Value("${providers.student-group}") String studentGroup
     ) {
         this.restClient = restClientBuilder
                 .baseUrl(providersBaseUrl)
                 .build();
 
-        this.apiKey = apiKey;
         this.studentGroup = studentGroup;
     }
 
-    public AsyncFlowSubmitResponse submit(AsyncFlowSubmitRequest request) {
+    public AsyncFlowSubmitResponse submit(
+            AsyncFlowSubmitRequest request,
+            String apiKey
+    ) {
         try {
             return restClient.post()
                     .uri("/asyncflow")
@@ -51,7 +51,10 @@ public class AsyncFlowClient {
         }
     }
 
-    public AsyncFlowStatusResponse getStatus(String trackingId) {
+    public AsyncFlowStatusResponse getStatus(
+            String trackingId,
+            String apiKey
+    ) {
         try {
             return restClient.get()
                     .uri("/asyncflow/{trackingId}", trackingId)

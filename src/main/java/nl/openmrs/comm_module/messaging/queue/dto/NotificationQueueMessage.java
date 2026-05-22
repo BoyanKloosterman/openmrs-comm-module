@@ -17,6 +17,8 @@ public class NotificationQueueMessage {
     /** Koppeling naar polled appointment (geen PII in delivery log). */
     private String appointmentFhirId;
     private int retryCount;
+    private String organisationId;
+    private int providerAttemptIndex;
 
     public NotificationQueueMessage() {
     }
@@ -111,5 +113,21 @@ public class NotificationQueueMessage {
 
     public void incrementRetryCount() {
         this.retryCount++;
+    }
+
+    public String getOrganisationId() {
+        return organisationId;
+    }
+
+    public void setOrganisationId(String organisationId) {
+        this.organisationId = organisationId;
+    }
+
+    public int getProviderAttemptIndex() {
+        return providerAttemptIndex;
+    }
+
+    public void setProviderAttemptIndex(int providerAttemptIndex) {
+        this.providerAttemptIndex = providerAttemptIndex;
     }
 }

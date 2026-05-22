@@ -9,23 +9,20 @@ import org.springframework.web.reactive.function.client.WebClient;
 public class SwiftSendClient {
 
     private final WebClient webClient;
-    private final String apiKey;
     private final String studentGroup;
 
     public SwiftSendClient(
             WebClient.Builder webClientBuilder,
             @Value("${providers.base-url}") String baseUrl,
-            @Value("${providers.swiftsend.api-key}") String apiKey,
             @Value("${providers.student-group}") String studentGroup
     ) {
         this.webClient = webClientBuilder
                 .baseUrl(baseUrl)
                 .build();
-        this.apiKey = apiKey;
         this.studentGroup = studentGroup;
     }
 
-    public SwiftSendResponse send(SwiftSendRequest request) {
+    public SwiftSendResponse send(SwiftSendRequest request, String apiKey) {
         return webClient.post()
                 .uri("/swiftsend")
                 .header("X-API-KEY", apiKey)

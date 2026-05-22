@@ -11,9 +11,13 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class AsyncFlowProviderTest {
+
+    private static final String CREDENTIALS_JSON =
+            "{\"apiKey\":\"asyncflow-api-key\"}";
 
     private AsyncFlowClient asyncFlowClient;
     private AsyncFlowProvider asyncFlowProvider;
@@ -35,23 +39,32 @@ class AsyncFlowProviderTest {
         when(response.isAccepted()).thenReturn(true);
         when(response.getTrackingId()).thenReturn("ASF-1234567890ABCDEF");
 
-        when(asyncFlowClient.submit(any(AsyncFlowSubmitRequest.class))).thenReturn(response);
+        when(asyncFlowClient.submit(
+                any(AsyncFlowSubmitRequest.class),
+                eq("asyncflow-api-key")
+        )).thenReturn(response);
 
-        ProviderSendResult result = asyncFlowProvider.sendMessage(createMessage());
+        ProviderSendResult result = asyncFlowProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertTrue(result.isSuccessful());
         assertEquals("SUBMITTED", result.getStatus());
         assertEquals("ASF-1234567890ABCDEF", result.getProviderMessageId());
         assertNull(result.getErrorMessage());
 
-        verify(asyncFlowClient).submit(any(AsyncFlowSubmitRequest.class));
+        verify(asyncFlowClient).submit(
+                any(AsyncFlowSubmitRequest.class),
+                eq("asyncflow-api-key")
+        );
     }
 
     @Test
     void sendMessageReturnsFailedWhenResponseIsNull() {
-        when(asyncFlowClient.submit(any(AsyncFlowSubmitRequest.class))).thenReturn(null);
+        when(asyncFlowClient.submit(
+                any(AsyncFlowSubmitRequest.class),
+                eq("asyncflow-api-key")
+        )).thenReturn(null);
 
-        ProviderSendResult result = asyncFlowProvider.sendMessage(createMessage());
+        ProviderSendResult result = asyncFlowProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertFalse(result.isSuccessful());
         assertEquals("FAILED", result.getStatus());
@@ -64,9 +77,12 @@ class AsyncFlowProviderTest {
         when(response.isAccepted()).thenReturn(false);
         when(response.getMessage()).thenReturn("Message was rejected");
 
-        when(asyncFlowClient.submit(any(AsyncFlowSubmitRequest.class))).thenReturn(response);
+        when(asyncFlowClient.submit(
+                any(AsyncFlowSubmitRequest.class),
+                eq("asyncflow-api-key")
+        )).thenReturn(response);
 
-        ProviderSendResult result = asyncFlowProvider.sendMessage(createMessage());
+        ProviderSendResult result = asyncFlowProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertFalse(result.isSuccessful());
         assertEquals("FAILED", result.getStatus());
@@ -76,14 +92,27 @@ class AsyncFlowProviderTest {
 
     @Test
     void sendMessageReturnsFailedWhenClientThrowsException() {
-        when(asyncFlowClient.submit(any(AsyncFlowSubmitRequest.class)))
-                .thenThrow(new AsyncFlowApiException("AsyncFlow API error"));
+        when(asyncFlowClient.submit(
+                any(AsyncFlowSubmitRequest.class),
+                eq("asyncflow-api-key")
+        )).thenThrow(new AsyncFlowApiException("AsyncFlow API error"));
 
-        ProviderSendResult result = asyncFlowProvider.sendMessage(createMessage());
+        ProviderSendResult result = asyncFlowProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertFalse(result.isSuccessful());
         assertEquals("FAILED", result.getStatus());
         assertEquals("AsyncFlow API error", result.getErrorMessage());
+    }
+
+    @Test
+    void sendMessageReturnsFailedWhenCredentialsAreMissing() {
+        ProviderSendResult result = asyncFlowProvider.sendMessage(createMessage(), "{}");
+
+        assertFalse(result.isSuccessful());
+        assertEquals("FAILED", result.getStatus());
+        assertEquals("AsyncFlow credentials missing apiKey", result.getErrorMessage());
+
+        verify(asyncFlowClient, never()).submit(any(), any());
     }
 
     private NotificationQueueMessage createMessage() {
