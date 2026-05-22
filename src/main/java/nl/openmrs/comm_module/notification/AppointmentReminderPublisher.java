@@ -8,7 +8,8 @@ import nl.openmrs.comm_module.provider.MessagingProviderType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-
+import nl.openmrs.comm_module.organisation.dto.OrganisationProviderConfigResponse;
+import nl.openmrs.comm_module.organisation.service.OrganisationConfigService;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,16 +23,19 @@ public class AppointmentReminderPublisher {
     private final AppointmentReminderEligibilityService eligibilityService;
     private final NotificationDeliveryLogService deliveryLogService;
     private final RabbitMqProducer rabbitMqProducer;
+    private final OrganisationConfigService organisationConfigService;
 
     public AppointmentReminderPublisher(
             AppointmentReminderMessageBuilder messageBuilder,
             AppointmentReminderEligibilityService eligibilityService,
             NotificationDeliveryLogService deliveryLogService,
-            RabbitMqProducer rabbitMqProducer) {
+            RabbitMqProducer rabbitMqProducer,
+            OrganisationConfigService organisationConfigService) {
         this.messageBuilder = messageBuilder;
         this.eligibilityService = eligibilityService;
         this.deliveryLogService = deliveryLogService;
         this.rabbitMqProducer = rabbitMqProducer;
+        this.organisationConfigService = organisationConfigService;
     }
 
     public int publishReminders(List<PolledAppointmentEntity> appointments, AppointmentReminderSpec spec) {
@@ -69,11 +73,23 @@ public class AppointmentReminderPublisher {
                 continue;
             }
             NotificationQueueMessage message = messageOpt.get();
-            if (providerOverride != null) {
-                message.setProvider(providerOverride);
-            }
-            rabbitMqProducer.publish(message);
+
+            MessagingProviderType fallbackProvider =
+                    providerOverride != null ? providerOverride : message.getProvider();
+
+            MessagingProviderType firstProvider =
+                    resolveFirstProviderForOrganisation(
+                            appointment.getOrganisationId(),
+                            fallbackProvider
+                    );
+
+            message.setProvider(firstProvider);
+            message.setOrganisationId(appointment.getOrganisationId());
+            message.setProviderAttemptIndex(0);
+            message.setRetryCount(0);
+
             deliveryLogService.recordQueued(message);
+            rabbitMqProducer.publish(message);
             queued++;
             log.info(
                     "{}-herinnering in queue: notificationId={} appointment={} naar {}",
@@ -83,5 +99,31 @@ public class AppointmentReminderPublisher {
                     message.getRecipient());
         }
         return queued;
+    }
+
+    private MessagingProviderType resolveFirstProviderForOrganisation(
+            String organisationId,
+            MessagingProviderType fallbackProvider
+    ) {
+        if (organisationId == null || organisationId.isBlank()) {
+            return fallbackProvider;
+        }
+
+        try {
+            List<OrganisationProviderConfigResponse> providers =
+                    organisationConfigService.getEnabledProviders(organisationId);
+
+            if (!providers.isEmpty()) {
+                return providers.get(0).getProviderType();
+            }
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "Geen organisatie-providerconfig gevonden voor organisationId={}, fallback provider={}",
+                    organisationId,
+                    fallbackProvider
+            );
+        }
+
+        return fallbackProvider;
     }
 }
