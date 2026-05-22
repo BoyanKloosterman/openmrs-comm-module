@@ -149,6 +149,23 @@ class RabbitMqConsumerTest {
     }
 
     @Test
+    void weigertZonderRequeueBijOntbrekendeOrganisatieconfig() {
+        NotificationQueueMessage message = createMessage();
+
+        when(deliveryLogService.hasQueuedDeliveryRecord(message.getNotificationId())).thenReturn(true);
+        when(providerFactory.getProvider(MessagingProviderType.SWIFTSEND)).thenReturn(messagingProvider);
+        when(organisationConfigService.getDecryptedCredentials(ORGANISATION_ID, MessagingProviderType.SWIFTSEND))
+                .thenThrow(new IllegalArgumentException("Organisation config not found: " + ORGANISATION_ID));
+
+        assertThrows(AmqpRejectAndDontRequeueException.class, () -> consumer.consume(message));
+
+        verify(deliveryLogService)
+                .recordProviderAttempt(eq(message), org.mockito.ArgumentMatchers.argThat(r -> !r.isSuccessful()));
+        verify(messagingProvider, never()).sendMessage(any(), any());
+        verify(rabbitMqProducer, never()).publishRetry(message);
+    }
+
+    @Test
     void slaatVerzendingOverAlsQueuedBijAnnuleringWegIs() {
         NotificationQueueMessage message = createMessage();
         message.setAppointmentFhirId("omrs-appt-24");
