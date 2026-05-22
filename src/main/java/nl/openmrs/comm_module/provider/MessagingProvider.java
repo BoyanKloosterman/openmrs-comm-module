@@ -6,5 +6,4 @@ public interface MessagingProvider {
 
     MessagingProviderType getType();
 
-    ProviderSendResult sendMessage(NotificationQueueMessage message);
-}
+    ProviderSendResult sendMessage(NotificationQueueMessage message, String credentialsJson);}
