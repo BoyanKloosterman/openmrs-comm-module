@@ -11,93 +11,100 @@ import java.util.UUID;
 @Table(name = "organisation_config")
 public class OrganisationConfigEntity {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.UUID)
+  private UUID id;
 
-    @Column(name = "organisation_id", nullable = false, unique = true)
-    private String organisationId;
+  @Column(name = "organisation_id", nullable = false, unique = true)
+  private String organisationId;
 
-    @Column(nullable = false)
-    private boolean active = true;
+  @Column(nullable = false)
+  private boolean active = true;
 
-    @OneToMany(
-            mappedBy = "organisationConfig",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true,
-            fetch = FetchType.LAZY
-    )
-    private List<OrganisationProviderConfigEntity> providers = new ArrayList<>();
+  @Column(name = "timezone", nullable = false)
+  private String timezone = "Europe/Amsterdam";
 
-    @Column(name = "created_at", nullable = false)
-    private Instant createdAt;
+  @OneToMany(mappedBy = "organisationConfig", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+  private List<OrganisationProviderConfigEntity> providers = new ArrayList<>();
 
-    @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
+  @Column(name = "created_at", nullable = false)
+  private Instant createdAt;
 
-    public OrganisationConfigEntity() {
-    }
+  @Column(name = "updated_at", nullable = false)
+  private Instant updatedAt;
 
-    public OrganisationConfigEntity(String organisationId, boolean active) {
-        this.organisationId = organisationId;
-        this.active = active;
-    }
+  public OrganisationConfigEntity() {
+  }
 
-    @PrePersist
-    public void onCreate() {
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.updatedAt = now;
-    }
+  public OrganisationConfigEntity(String organisationId, boolean active) {
+    this.organisationId = organisationId;
+    this.active = active;
+    this.timezone = "Europe/Amsterdam";
+  }
 
-    @PreUpdate
-    public void onUpdate() {
-        this.updatedAt = Instant.now();
-    }
+  @PrePersist
+  public void onCreate() {
+    Instant now = Instant.now();
+    this.createdAt = now;
+    this.updatedAt = now;
+  }
 
-    public void addProvider(OrganisationProviderConfigEntity providerConfig) {
-        providers.add(providerConfig);
-        providerConfig.setOrganisationConfig(this);
-    }
+  @PreUpdate
+  public void onUpdate() {
+    this.updatedAt = Instant.now();
+  }
 
-    public void removeProvider(OrganisationProviderConfigEntity providerConfig) {
-        providers.remove(providerConfig);
-        providerConfig.setOrganisationConfig(null);
-    }
+  public void addProvider(OrganisationProviderConfigEntity providerConfig) {
+    providers.add(providerConfig);
+    providerConfig.setOrganisationConfig(this);
+  }
 
-    public UUID getId() {
-        return id;
-    }
+  public void removeProvider(OrganisationProviderConfigEntity providerConfig) {
+    providers.remove(providerConfig);
+    providerConfig.setOrganisationConfig(null);
+  }
 
-    public String getOrganisationId() {
-        return organisationId;
-    }
+  public UUID getId() {
+    return id;
+  }
 
-    public void setOrganisationId(String organisationId) {
-        this.organisationId = organisationId;
-    }
+  public String getOrganisationId() {
+    return organisationId;
+  }
 
-    public boolean isActive() {
-        return active;
-    }
+  public void setOrganisationId(String organisationId) {
+    this.organisationId = organisationId;
+  }
 
-    public void setActive(boolean active) {
-        this.active = active;
-    }
+  public boolean isActive() {
+    return active;
+  }
 
-    public List<OrganisationProviderConfigEntity> getProviders() {
-        return providers;
-    }
+  public void setActive(boolean active) {
+    this.active = active;
+  }
 
-    public void setProviders(List<OrganisationProviderConfigEntity> providers) {
-        this.providers = providers;
-    }
+  public String getTimezone() {
+    return timezone;
+  }
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+  public void setTimezone(String timezone) {
+    this.timezone = timezone;
+  }
 
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
+  public List<OrganisationProviderConfigEntity> getProviders() {
+    return providers;
+  }
+
+  public void setProviders(List<OrganisationProviderConfigEntity> providers) {
+    this.providers = providers;
+  }
+
+  public Instant getCreatedAt() {
+    return createdAt;
+  }
+
+  public Instant getUpdatedAt() {
+    return updatedAt;
+  }
 }

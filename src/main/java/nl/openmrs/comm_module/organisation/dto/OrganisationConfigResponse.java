@@ -6,50 +6,56 @@ import java.util.UUID;
 
 public class OrganisationConfigResponse {
 
-    private UUID id;
-    private String organisationId;
-    private boolean active;
-    private List<OrganisationProviderConfigResponse> providers;
-    private Instant createdAt;
-    private Instant updatedAt;
+  private UUID id;
+  private String organisationId;
+  private boolean active;
+  private String timezone;
+  private List<OrganisationProviderConfigResponse> providers;
+  private Instant createdAt;
+  private Instant updatedAt;
 
-    public OrganisationConfigResponse(
-            UUID id,
-            String organisationId,
-            boolean active,
-            List<OrganisationProviderConfigResponse> providers,
-            Instant createdAt,
-            Instant updatedAt
-    ) {
-        this.id = id;
-        this.organisationId = organisationId;
-        this.active = active;
-        this.providers = providers;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
-    }
+  public OrganisationConfigResponse(
+      UUID id,
+      String organisationId,
+      boolean active,
+      String timezone,
+      List<OrganisationProviderConfigResponse> providers,
+      Instant createdAt,
+      Instant updatedAt) {
+    this.id = id;
+    this.organisationId = organisationId;
+    this.active = active;
+    this.timezone = timezone;
+    this.providers = providers;
+    this.createdAt = createdAt;
+    this.updatedAt = updatedAt;
+  }
 
-    public UUID getId() {
-        return id;
-    }
+  public UUID getId() {
+    return id;
+  }
 
-    public String getOrganisationId() {
-        return organisationId;
-    }
+  public String getOrganisationId() {
+    return organisationId;
+  }
 
-    public boolean isActive() {
-        return active;
-    }
+  public boolean isActive() {
+    return active;
+  }
 
-    public List<OrganisationProviderConfigResponse> getProviders() {
-        return providers;
-    }
+  public String getTimezone() {
+    return timezone;
+  }
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+  public List<OrganisationProviderConfigResponse> getProviders() {
+    return providers;
+  }
 
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
+  public Instant getCreatedAt() {
+    return createdAt;
+  }
+
+  public Instant getUpdatedAt() {
+    return updatedAt;
+  }
 }

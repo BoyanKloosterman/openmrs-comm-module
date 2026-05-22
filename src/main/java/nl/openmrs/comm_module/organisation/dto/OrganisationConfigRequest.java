@@ -5,34 +5,43 @@ import java.util.List;
 
 public class OrganisationConfigRequest {
 
-    private String organisationId;
-    private boolean active = true;
-    private List<OrganisationProviderConfigRequest> providers = new ArrayList<>();
+  private String organisationId;
+  private boolean active = true;
+  private String timezone = "Europe/Amsterdam";
+  private List<OrganisationProviderConfigRequest> providers = new ArrayList<>();
 
-    public OrganisationConfigRequest() {
-    }
+  public OrganisationConfigRequest() {
+  }
 
-    public String getOrganisationId() {
-        return organisationId;
-    }
+  public String getOrganisationId() {
+    return organisationId;
+  }
 
-    public void setOrganisationId(String organisationId) {
-        this.organisationId = organisationId;
-    }
+  public void setOrganisationId(String organisationId) {
+    this.organisationId = organisationId;
+  }
 
-    public boolean isActive() {
-        return active;
-    }
+  public boolean isActive() {
+    return active;
+  }
 
-    public void setActive(boolean active) {
-        this.active = active;
-    }
+  public void setActive(boolean active) {
+    this.active = active;
+  }
 
-    public List<OrganisationProviderConfigRequest> getProviders() {
-        return providers;
-    }
+  public String getTimezone() {
+    return timezone;
+  }
 
-    public void setProviders(List<OrganisationProviderConfigRequest> providers) {
-        this.providers = providers;
-    }
+  public void setTimezone(String timezone) {
+    this.timezone = timezone;
+  }
+
+  public List<OrganisationProviderConfigRequest> getProviders() {
+    return providers;
+  }
+
+  public void setProviders(List<OrganisationProviderConfigRequest> providers) {
+    this.providers = providers;
+  }
 }
