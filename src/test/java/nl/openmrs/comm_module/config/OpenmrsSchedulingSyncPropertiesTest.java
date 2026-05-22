@@ -7,8 +7,15 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OpenmrsSchedulingSyncPropertiesTest {
+
+    @Test
+    void defaultSourceIsPatientAppointment() {
+        assertEquals("patient-appointment", new OpenmrsSchedulingSyncProperties().getSource());
+        assertTrue(new OpenmrsSchedulingSyncProperties().isPatientAppointmentSource());
+    }
 
     @Test
     void patientAppointmentDbUtcGeeftAmsterdamWeergave() {

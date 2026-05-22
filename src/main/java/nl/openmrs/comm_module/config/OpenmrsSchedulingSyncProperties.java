@@ -13,7 +13,7 @@ public class OpenmrsSchedulingSyncProperties {
     private boolean enabled = true;
 
     /** legacy = appointmentscheduling_* ; patient-appointment = SPA reference distro. */
-    private String source = "legacy";
+    private String source = "patient-appointment";
 
     private int intervalMinutes = 1;
 
