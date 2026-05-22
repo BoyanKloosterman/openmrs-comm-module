@@ -26,4 +26,8 @@ public interface PolledAppointmentRepository extends JpaRepository<PolledAppoint
             @Param("now") Instant now,
             @Param("windowStart") Instant windowStart,
             @Param("windowEnd") Instant windowEnd);
+
+    /** Rijen die nog in DB staan maar niet meer in de toekomst liggen (US-003). */
+    List<PolledAppointmentEntity> findByOrganisationIdAndAppointmentDatetimeLessThanEqual(
+            String organisationId, Instant cutoff);
 }
