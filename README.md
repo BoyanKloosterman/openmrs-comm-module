@@ -34,9 +34,11 @@ Lokaal draait **OpenMRS 3 Reference Application** in een **aparte** Docker-stack
 flowchart LR
   subgraph distro [OpenMRS 3 distro — aparte compose]
     SPA[Bahmni appointments SPA]
-    FHIR[FHIR2 R5<br/>Appointment + Patient]
+    MARIA[(MariaDB patient_appointment)]
   end
-  subgraph comm [Communicatiemodule]
+  subgraph comm [Communicatiemodule compose]
+    SYNC[SPA → HAPI sync]
+    HAPI[HAPI FHIR R5]
     POLL[FHIR poll]
     SCHED[Herinnerings-scheduler]
     RMQ[RabbitMQ producer]
@@ -45,8 +47,11 @@ flowchart LR
     Q[RabbitMQ queues]
     PROV[Messaging providers]
   end
-  SPA --> FHIR
-  FHIR --> POLL
+  SPA --> MARIA
+  MARIA --> SYNC
+  SYNC --> HAPI
+  HAPI --> POLL
+  MARIA -. JDBC-fallback bij FHIR-fout .-> POLL
   POLL --> SCHED
   SCHED --> RMQ
   RMQ --> Q
@@ -56,11 +61,12 @@ flowchart LR
 **Kernstappen in de keten**
 
 1. **Afspraken in OpenMRS**: via de distro, bijv. http://localhost/openmrs/spa/home/appointments (Bahmni appointments).
-2. **FHIR poll** (met JDBC-fallback): primair `Appointment` van `OPENMRS_FHIR_SERVER_URL`; bij FHIR-fout valt de module terug op `patient_appointment` in MariaDB.
-3. **Scheduler**: afspraken in het geconfigureerde tijdvenster (24u / 1u lead) worden als bericht op de juiste provider-queue gezet.
-4. **Consumer**: RabbitMQ-workers sturen via de gekozen provider; resultaat staat in `notification_delivery_log` (zichtbaar in de logmonitor-GUI).
+2. **Sync (optioneel)**: JDBC leest `patient_appointment` en schrijft `Patient`/`Appointment` naar HAPI R5 (`OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=true`).
+3. **FHIR poll** (met JDBC-fallback): primair `Appointment` van `OPENMRS_FHIR_SERVER_URL` (HAPI); bij FHIR-fout valt de module terug op MariaDB.
+4. **Scheduler**: afspraken in het geconfigureerde tijdvenster (24u / 1u lead) worden als bericht op de juiste provider-queue gezet.
+5. **Consumer**: RabbitMQ-workers sturen via de gekozen provider; resultaat staat in `notification_delivery_log` (zichtbaar in de logmonitor-GUI).
 
-Optioneel: **JDBC → FHIR sync** (`OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=true`) exporteert SPA-afspraken naar FHIR2 zodat FHIR-poll data kan vullen.
+OpenMRS **FHIR2 is R4** en heeft **geen** `Appointment` op de reference distro; daarom draait **standalone HAPI R5** in deze compose (US-003).
 
 Besluitvorming over de koppeling staat in [docs/ADR-3-hoe-koppelen-we-aan-openmrs.md](docs/ADR-3-hoe-koppelen-we-aan-openmrs.md) (FHIR polling i.p.v. webhooks).
 
@@ -92,9 +98,10 @@ Besluitvorming over de koppeling staat in [docs/ADR-3-hoe-koppelen-we-aan-openmr
    - `OPENMRS_FHIR_ORGANISATION_ID` — tenant-sleutel voor opslag; bij meerdere bronnen later per organisatie via API (zie hieronder).  
    - Optioneel: `OPENMRS_FHIR_POLL_INTERVAL_MINUTES`, `OPENMRS_FHIR_APPOINTMENT_POLL_SINCE_DAYS`, retry-instellingen (zie `.env.example`).
 
-4. **OpenMRS scheduling-sync** (alleen Legacy Scheduling + gedeelde Postgres, niet voor de distro)  
-   - `OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=false` bij FHIR-poll op de distro.  
-   - `OPENMRS_SCHEDULING_SYNC_ZONE` — tijdzone bij JDBC-export.  
+4. **OpenMRS scheduling-sync** (demo: SPA → HAPI)  
+   - `OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED` / `OPENMRS_SCHEDULING_FHIR_SYNC_APPOINTMENT` — export naar HAPI R5.  
+   - `OPENMRS_SCHEDULING_SYNC_DB_ZONE` — zone van **naive** `start_date_time` in MariaDB (reference distro: meestal `UTC`).  
+   - `OPENMRS_SCHEDULING_SYNC_ZONE` — weergave en herinneringsvensters (`Europe/Amsterdam`). Sync en JDBC-poll gebruiken **dezelfde** `dbZone` voor Instant-berekening.  
    - `OPENMRS_SCHEDULING_SYNC_FALLBACK_PHONE` — alleen voor test als patiënten geen telefoonattribuut hebben.
 
 5. **Herinneringen**  
@@ -127,11 +134,12 @@ Besluitvorming over de koppeling staat in [docs/ADR-3-hoe-koppelen-we-aan-openmr
 | **FHIR downtime** | Poll faalt tijdelijk; bij volgende cyclus opnieuw. Afspraken die al in de DB staan worden nog steeds volgens schema herinnerd. |
 | **Module downtime** | Na herstart hervat polling en scheduler; verstreken afspraken worden overgeslagen. |
 | **Niet real-time** | Koppeling is poll-gebaseerd; geschikt voor herinneringen 24u/1u van tevoren, niet voor seconden-real-time. |
-| **Tijdzone** | Scheduler en vensters gebruiken UTC-instanten met configureerbare zone; controleer `COMM_NOTIFICATION_REMINDER_ZONE` en OpenMRS/FHIR-tijden. |
+| **Tijdzone** | SPA slaat tijden vaak als UTC-naive op (`13:05` in DB = `15:05` NL zomer). Zet `OPENMRS_SCHEDULING_SYNC_DB_ZONE=UTC` en `OPENMRS_SCHEDULING_SYNC_ZONE=Europe/Amsterdam`. Verkeerde `dbZone` geeft 2 uur verschil in de logmonitor. |
 | **TLS** | Client-TLS 1.3 is geconfigureerd; zorg dat FHIR- en provider-endpoints geldige certificaten hebben. |
 | **Encryptiesleutel** | Nooit roteren zonder migratieplan voor versleutelde velden. |
 | **Test-endpoints** | `/api/notifications/test` en `/api/test/scheduling` zijn bedoeld voor ontwikkeling/demo — beperk in productie via netwerk of reverse proxy. |
-| **Docker-referentie ≠ productie** | Lokaal: distro op poort 80, comm-module op 8081; `OPENMRS_FHIR_SERVER_URL` wijst naar FHIR2 R5 van uw OpenMRS. |
+| **Docker-referentie ≠ productie** | Lokaal: distro op 80, HAPI op **8082**, comm-module op 8081. Productie: eigen FHIR R5-URL, geen HAPI uit deze compose verplicht. |
+| **HAPI healthcheck** | `hapiproject/hapi` is distroless (geen `curl`); compose gebruikt `service_started`, niet `healthy`. |
 
 Volledige variabelenlijst: [.env.example](.env.example).
 
@@ -156,7 +164,7 @@ docker compose up -d
 
 Wacht tot gateway/backend klaar zijn. UI: http://localhost/openmrs/spa — afspraken: http://localhost/openmrs/spa/home/appointments (standaard login `admin` / `Admin123`).
 
-Controleer FHIR2 R5 vanaf de host:
+Controleer HAPI R5 (start na comm-module-compose, poort **8082**):
 
 ```bash
 curl -sS http://localhost:8082/fhir/metadata
@@ -177,7 +185,8 @@ Pas minimaal alle `changeme`-waarden aan. Belangrijk:
 - `OPENMRS_FHIR_USERNAME` / `OPENMRS_FHIR_PASSWORD` — distro-credentials (standaard `admin` / `Admin123`).
 - `OPENMRS_FHIR_POLL_MODE=fhir` en `OPENMRS_FHIR_JDBC_FALLBACK_ENABLED=true` — FHIR primair, JDBC bij fout.
 - `OPENMRS_DATASOURCE_URL` — MariaDB voor JDBC-fallback (reference distro poort 3307).
-- `OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=true` — optioneel SPA → FHIR2 exporteren.
+- `OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=true` — SPA → HAPI R5 exporteren (nodig voor FHIR-poll met data).
+- `OPENMRS_SCHEDULING_SYNC_DB_ZONE=UTC` en `OPENMRS_SCHEDULING_SYNC_ZONE=Europe/Amsterdam` — tijdzone demo/reference distro.
 
 ### Stap 2 — Comm-module-stack starten
 
@@ -189,7 +198,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-Wacht tot `comm-module-app` **healthy** is.
+Wacht tot `comm-module-app` **healthy** is. `hapi-fhir-r5` heeft geen Docker-healthcheck (distroless image); controleer met `curl http://localhost:8082/fhir/metadata` als de app FHIR-fouten logt.
 
 ### Stap 3 — Controleren
 
@@ -198,7 +207,8 @@ Wacht tot `comm-module-app` **healthy** is.
 | Comm-module health | http://localhost:8081/actuator/health |
 | OpenMRS distro SPA | http://localhost/openmrs/spa |
 | Afspraken (Bahmni) | http://localhost/openmrs/spa/home/appointments |
-| FHIR2 R5 metadata | `curl -u admin:Admin123 http://localhost/openmrs/ws/fhir2/R5/metadata` |
+| HAPI R5 metadata | `curl -sS http://localhost:8082/fhir/metadata` |
+| OpenMRS FHIR2 R4 (geen Appointment) | `curl -sS http://localhost/openmrs/ws/fhir2/R4/metadata` |
 | Logmonitor (poll + delivery log) | http://localhost:8081/test-scheduling.html |
 | RabbitMQ Management | http://localhost:15672 — credentials uit `.env` |
 | Grafana | http://localhost:3000 — `GRAFANA_ADMIN_*` uit `.env` |
@@ -278,6 +288,7 @@ curl -sS http://localhost:8081/api/test/scheduling/status
 |---------|-----------|-----|
 | *(extern)* distro gateway | 80 | OpenMRS 3 + Bahmni appointments (aparte compose) |
 | `comm-module` | 8081 | Deze applicatie |
+| `hapi-fhir-r5` | 8082 | Standalone FHIR R5 (Appointment + Patient) |
 | `postgres` | 5432 | Database comm-module |
 | `rabbitmq` | 5672, 15672 | AMQP + management UI |
 | `fakecomworld` | 1337 | Gesimuleerde messaging-API |
@@ -331,7 +342,7 @@ Unit/integration tests:
 ./mvnw test
 ```
 
-Rapportage (Sprint 3): [TESTRAPPORTAGE.md](TESTRAPPORTAGE.md) (106 tests, kernlogica) en [PERFORMANCERAPPORTAGE.md](PERFORMANCERAPPORTAGE.md) (throughput/latency in Docker).
+Rapportage (Sprint 3): [TESTRAPPORTAGE.md](TESTRAPPORTAGE.md) (**146** tests, kernlogica + FHIR/sync) en [PERFORMANCERAPPORTAGE.md](PERFORMANCERAPPORTAGE.md) (throughput/latency in Docker, bijgewerkt 22-05-2026).
 
 ---
 
