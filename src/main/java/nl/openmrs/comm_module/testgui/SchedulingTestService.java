@@ -256,11 +256,16 @@ public class SchedulingTestService {
     }
 
     private String resolvePollSourceLabel() {
-        String url = fhirProperties.getServerUrl();
-        if (url != null && !url.isBlank()) {
-            return url.trim();
+        String fhirUrl = fhirProperties.getServerUrl();
+        boolean jdbc = dataSourceProperties.isConfigured();
+        if (fhirUrl != null && !fhirUrl.isBlank()) {
+            String label = fhirUrl.trim();
+            if (jdbc && !"jdbc".equalsIgnoreCase(pollMode)) {
+                label += " (+ JDBC-fallback)";
+            }
+            return label;
         }
-        if ("jdbc".equalsIgnoreCase(pollMode) && dataSourceProperties.isConfigured()) {
+        if (jdbc) {
             return dataSourceProperties.getUrl().trim();
         }
         return "";

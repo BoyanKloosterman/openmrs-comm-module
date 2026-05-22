@@ -31,7 +31,7 @@ class OpenmrsFhirResourceFactoryTest {
     void bouwtPatientMetFallbackTelefoon() {
         OpenmrsSchedulingAppointmentRow row = row(2, "SCHEDULED", false);
         Patient patient = factory.buildPatient(row, properties);
-        assertEquals("omrs-patient-uuid-1", patient.getIdElement().getIdPart());
+        assertEquals("uuid-1", patient.getIdElement().getIdPart());
         assertTrue(patient.getTelecomFirstRep().hasValue());
     }
 

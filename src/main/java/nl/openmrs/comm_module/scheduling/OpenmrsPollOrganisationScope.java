@@ -16,14 +16,17 @@ public class OpenmrsPollOrganisationScope {
     private final OpenmrsFhirProperties fhirProperties;
     private final OpenmrsDataSourceProperties dataSourceProperties;
     private final String pollMode;
+    private final boolean jdbcFallbackEnabled;
 
     public OpenmrsPollOrganisationScope(
             OpenmrsFhirProperties fhirProperties,
             OpenmrsDataSourceProperties dataSourceProperties,
-            @Value("${openmrs.fhir.poll-mode:fhir}") String pollMode) {
+            @Value("${openmrs.fhir.poll-mode:fhir}") String pollMode,
+            @Value("${openmrs.fhir.jdbc-fallback-enabled:true}") boolean jdbcFallbackEnabled) {
         this.fhirProperties = fhirProperties;
         this.dataSourceProperties = dataSourceProperties;
         this.pollMode = pollMode;
+        this.jdbcFallbackEnabled = jdbcFallbackEnabled;
     }
 
     public List<String> activeOrganisationIds() {
@@ -31,7 +34,7 @@ public class OpenmrsPollOrganisationScope {
         for (OrganisationFhirConnection connection : fhirProperties.resolveActiveConnections()) {
             ids.add(connection.organisationId());
         }
-        if (ids.isEmpty() && jdbcPollFallback()) {
+        if (ids.isEmpty() && jdbcPollActive()) {
             ids.add(fhirProperties.getOrganisationId());
         }
         return List.copyOf(ids);
@@ -42,7 +45,7 @@ public class OpenmrsPollOrganisationScope {
         if (!connections.isEmpty()) {
             return connections;
         }
-        if (jdbcPollFallback()) {
+        if (jdbcPollActive()) {
             return List.of(jdbcConnection());
         }
         return List.of();
@@ -58,7 +61,14 @@ public class OpenmrsPollOrganisationScope {
                 fhirProperties.getAppointmentPollSinceDays());
     }
 
-    private boolean jdbcPollFallback() {
-        return "jdbc".equalsIgnoreCase(pollMode) && dataSourceProperties.isConfigured();
+    /** JDBC-only modus, of FHIR-modus met fallback en geconfigureerde MariaDB. */
+    private boolean jdbcPollActive() {
+        if (!dataSourceProperties.isConfigured()) {
+            return false;
+        }
+        if ("jdbc".equalsIgnoreCase(pollMode)) {
+            return true;
+        }
+        return "fhir".equalsIgnoreCase(pollMode) && jdbcFallbackEnabled;
     }
 }

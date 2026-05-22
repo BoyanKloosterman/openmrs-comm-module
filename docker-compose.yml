@@ -48,6 +48,29 @@ services:
     networks:
       - comm-network
 
+  # Standalone FHIR R5 (Appointment + Patient) — US-003; image: hapiproject/hapi op Docker Hub
+  hapi-fhir-r5:
+    image: hapiproject/hapi:latest
+    container_name: comm-module-hapi-fhir-r5
+    environment:
+      HAPI_FHIR_FHIR_VERSION: R5
+      SPRING_DATASOURCE_URL: jdbc:h2:mem:hapi_r5
+      SPRING_DATASOURCE_USERNAME: sa
+      SPRING_DATASOURCE_PASSWORD: ""
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.h2.Driver
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: ca.uhn.fhir.jpa.model.dialect.HapiFhirH2Dialect
+    ports:
+      - "8082:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/fhir/metadata"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    networks:
+      - comm-network
+    restart: unless-stopped
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.115.1
     container_name: comm-module-otel-collector
@@ -71,6 +94,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      hapi-fhir-r5:
+        condition: service_healthy
       otel-collector:
         condition: service_started
       fakecomworld:
@@ -91,6 +116,7 @@ services:
       OPENMRS_DATASOURCE_PASSWORD: ${OPENMRS_DATASOURCE_PASSWORD:-}
       OPENMRS_SCHEDULING_SOURCE: ${OPENMRS_SCHEDULING_SOURCE:-patient-appointment}
       OPENMRS_FHIR_POLL_MODE: ${OPENMRS_FHIR_POLL_MODE:-fhir}
+      OPENMRS_FHIR_JDBC_FALLBACK_ENABLED: ${OPENMRS_FHIR_JDBC_FALLBACK_ENABLED:-true}
       OPENMRS_FHIR_SERVER_URL: ${OPENMRS_FHIR_SERVER_URL:-}
       OPENMRS_FHIR_USERNAME: ${OPENMRS_FHIR_USERNAME:-}
       OPENMRS_FHIR_PASSWORD: ${OPENMRS_FHIR_PASSWORD:-}
@@ -98,6 +124,7 @@ services:
       OPENMRS_FHIR_POLL_INTERVAL_MINUTES: ${OPENMRS_FHIR_POLL_INTERVAL_MINUTES:-1}
       OPENMRS_FHIR_APPOINTMENT_POLL_SINCE_DAYS: ${OPENMRS_FHIR_APPOINTMENT_POLL_SINCE_DAYS:-30}
       OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED: ${OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED:-false}
+      OPENMRS_SCHEDULING_FHIR_SYNC_APPOINTMENT: ${OPENMRS_SCHEDULING_FHIR_SYNC_APPOINTMENT:-false}
       OPENMRS_SCHEDULING_FHIR_SYNC_INTERVAL_MINUTES: ${OPENMRS_SCHEDULING_FHIR_SYNC_INTERVAL_MINUTES:-1}
       OPENMRS_SCHEDULING_SYNC_ZONE: ${OPENMRS_SCHEDULING_SYNC_ZONE:-Europe/Amsterdam}
       OPENMRS_SCHEDULING_SYNC_DB_ZONE: ${OPENMRS_SCHEDULING_SYNC_DB_ZONE:-UTC}

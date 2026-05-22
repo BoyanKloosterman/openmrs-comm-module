@@ -11,7 +11,6 @@ import nl.openmrs.comm_module.poll.PollDiagnosticsRecorder;
 import org.hl7.fhir.r5.model.Appointment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -22,9 +21,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/** US-003: FHIR R5 Appointment + Patient ophalen en mappen per organisatie. */
+/** US-003: FHIR R5 Appointment + Patient ophalen (via {@link FallbackAppointmentPollSource}). */
 @Component
-@ConditionalOnProperty(name = "openmrs.fhir.poll-mode", havingValue = "fhir", matchIfMissing = true)
 public class FhirR5AppointmentPollSource implements AppointmentPollSource {
 
     private static final Logger log = LoggerFactory.getLogger(FhirR5AppointmentPollSource.class);

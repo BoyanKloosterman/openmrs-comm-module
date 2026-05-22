@@ -8,6 +8,7 @@ import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceGoneException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.hl7.fhir.instance.model.api.IBaseBundle;
+import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r5.model.Appointment;
 import org.hl7.fhir.r5.model.Bundle;
 import org.hl7.fhir.r5.model.CapabilityStatement;
@@ -122,7 +123,7 @@ public class OpenmrsFhirClient implements OpenmrsFhirOperations {
         if (patient == null || !patient.hasId()) {
             throw new IllegalArgumentException("Patient zonder id");
         }
-        client.update().resource(patient).execute();
+        upsertResource(patient);
     }
 
     @Override
@@ -130,6 +131,21 @@ public class OpenmrsFhirClient implements OpenmrsFhirOperations {
         if (appointment == null || !appointment.hasId()) {
             throw new IllegalArgumentException("Appointment zonder id");
         }
-        client.update().resource(appointment).execute();
+        upsertResource(appointment);
+    }
+
+    /** UPDATE; bij 404 CREATE (OpenMRS FHIR2 heeft resource vaak nog niet). */
+    private void upsertResource(IBaseResource resource) {
+        try {
+            client.update().resource(resource).execute();
+        } catch (ResourceNotFoundException e) {
+            client.create().resource(resource).execute();
+        } catch (BaseServerResponseException e) {
+            if (e.getStatusCode() == 404) {
+                client.create().resource(resource).execute();
+                return;
+            }
+            throw e;
+        }
     }
 }

@@ -28,7 +28,7 @@ Doelgroep van deze documentatie: **technisch beheerders** van een OpenMRS-organi
 
 ## Architectuur en datastroom
 
-Lokaal draait **OpenMRS 3 Reference Application** in een **aparte** Docker-stack ([openmrs-distro-referenceapplication](https://github.com/openmrs/openmrs-distro-referenceapplication)). Deze repository start alleen de comm-module-stack (Postgres, RabbitMQ, fake provider, observability). Afspraken maak je in de distro-SPA; de module pollt **FHIR2 R5** op die instantie.
+Lokaal draait **OpenMRS 3 Reference Application** in een **aparte** Docker-stack ([openmrs-distro-referenceapplication](https://github.com/openmrs/openmrs-distro-referenceapplication)). Deze repository start de comm-module-stack inclusief een **standalone HAPI FHIR R5**-server (`hapi-fhir-r5`, poort **8082**). Afspraken maak je in de distro-SPA; **sync** schrijft ze naar HAPI R5; **poll** leest `Appointment`/`Patient` van R5 (JDBC-fallback uit OpenMRS MariaDB blijft optioneel).
 
 ```mermaid
 flowchart LR
@@ -56,11 +56,11 @@ flowchart LR
 **Kernstappen in de keten**
 
 1. **Afspraken in OpenMRS**: via de distro, bijv. http://localhost/openmrs/spa/home/appointments (Bahmni appointments).
-2. **FHIR poll**: de module leest op interval `Appointment`-resources van `OPENMRS_FHIR_SERVER_URL` (standaard `…/openmrs/ws/fhir2/R5`) en slaat ze op als `polled_appointment`.
+2. **FHIR poll** (met JDBC-fallback): primair `Appointment` van `OPENMRS_FHIR_SERVER_URL`; bij FHIR-fout valt de module terug op `patient_appointment` in MariaDB.
 3. **Scheduler**: afspraken in het geconfigureerde tijdvenster (24u / 1u lead) worden als bericht op de juiste provider-queue gezet.
 4. **Consumer**: RabbitMQ-workers sturen via de gekozen provider; resultaat staat in `notification_delivery_log` (zichtbaar in de logmonitor-GUI).
 
-Optioneel: **JDBC scheduling-sync** (`OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=true`) exporteert Legacy Appointment Scheduling naar een aparte FHIR-server — niet gebruikt met de externe distro.
+Optioneel: **JDBC → FHIR sync** (`OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=true`) exporteert SPA-afspraken naar FHIR2 zodat FHIR-poll data kan vullen.
 
 Besluitvorming over de koppeling staat in [docs/ADR-3-hoe-koppelen-we-aan-openmrs.md](docs/ADR-3-hoe-koppelen-we-aan-openmrs.md) (FHIR polling i.p.v. webhooks).
 
@@ -72,8 +72,8 @@ Besluitvorming over de koppeling staat in [docs/ADR-3-hoe-koppelen-we-aan-openmr
 
 | Vereiste | Toelichting |
 |----------|-------------|
-| OpenMRS **3 Reference Application** | Aparte stack; Bahmni appointments + FHIR2 R5. |
-| Werkende **FHIR R5 REST**-API | `Appointment` en gekoppelde `Patient` (telefoon voor SMS). De module pollt deze API; OpenMRS FHIR2 of een aparte HAPI-server is mogelijk, zolang de base-URL en auth kloppen. |
+| OpenMRS **3 Reference Application** | Aparte stack; SPA-afspraken in MariaDB (`patient_appointment`). OpenMRS **FHIR2 is R4** en heeft **geen** `Appointment`. |
+| **FHIR R5 REST** (HAPI) | In deze compose: `http://hapi-fhir-r5:8080/fhir` met `Appointment` + `Patient` (US-003). |
 | Bereikbare netwerkverbinding | Van de comm-module naar OpenMRS (indien sync), FHIR-base-URL, RabbitMQ, Postgres en provider-API’s. |
 | PostgreSQL | Eigen database voor module-tabellen (`polled_appointment`, organisatieconfig, delivery logs). |
 | RabbitMQ | AMQP + management indien u queues wilt monitoren. |
@@ -159,7 +159,7 @@ Wacht tot gateway/backend klaar zijn. UI: http://localhost/openmrs/spa — afspr
 Controleer FHIR2 R5 vanaf de host:
 
 ```bash
-curl -sS -u admin:Admin123 http://localhost/openmrs/ws/fhir2/R5/metadata
+curl -sS http://localhost:8082/fhir/metadata
 ```
 
 ### Stap 1 — Omgevingsvariabelen (comm-module)
@@ -173,9 +173,11 @@ cp .env.example .env
 Pas minimaal alle `changeme`-waarden aan. Belangrijk:
 
 - `APP_ENCRYPTION_KEY` — precies **32 tekens**, stabiel tussen runs.
-- `OPENMRS_FHIR_SERVER_URL=http://host.docker.internal/openmrs/ws/fhir2/R5` — bereikbaar vanuit de comm-module-container.
+- `OPENMRS_FHIR_SERVER_URL=http://hapi-fhir-r5:8080/fhir` — HAPI R5 in dezelfde compose (host: poort **8082**).
 - `OPENMRS_FHIR_USERNAME` / `OPENMRS_FHIR_PASSWORD` — distro-credentials (standaard `admin` / `Admin123`).
-- `OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=false` — geen JDBC-export (distro gebruikt MariaDB).
+- `OPENMRS_FHIR_POLL_MODE=fhir` en `OPENMRS_FHIR_JDBC_FALLBACK_ENABLED=true` — FHIR primair, JDBC bij fout.
+- `OPENMRS_DATASOURCE_URL` — MariaDB voor JDBC-fallback (reference distro poort 3307).
+- `OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED=true` — optioneel SPA → FHIR2 exporteren.
 
 ### Stap 2 — Comm-module-stack starten
 

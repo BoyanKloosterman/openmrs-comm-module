@@ -8,8 +8,6 @@ import nl.openmrs.comm_module.poll.PollDiagnosticsRecorder;
 import nl.openmrs.comm_module.sync.OpenmrsPatientAppointmentJdbcRepository;
 import nl.openmrs.comm_module.sync.OpenmrsSchedulingAppointmentRow;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -23,9 +21,7 @@ import java.util.List;
  * Poll SPA-afspraken rechtstreeks uit OpenMRS MariaDB (geen FHIR2 Appointment op reference distro).
  */
 @Component
-@Primary
-@ConditionalOnBean(OpenmrsPatientAppointmentJdbcRepository.class)
-@ConditionalOnProperty(name = "openmrs.fhir.poll-mode", havingValue = "jdbc")
+@ConditionalOnBean(name = "openmrsJdbcTemplate")
 public class JdbcPatientAppointmentPollSource implements AppointmentPollSource {
 
     private final OpenmrsPatientAppointmentJdbcRepository appointmentRepository;

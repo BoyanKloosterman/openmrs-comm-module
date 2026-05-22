@@ -22,8 +22,10 @@ cp .env.example .env
 | `OPENMRS_DATASOURCE_URL` | `jdbc:mariadb://host.docker.internal:3307/openmrs` |
 | `OPENMRS_DATASOURCE_USERNAME` / `PASSWORD` | `openmrs` / `openmrs` (distro `.env`) |
 | `OPENMRS_SCHEDULING_SOURCE` | `patient-appointment` (SPA-tabel, geen legacy scheduling) |
-| `OPENMRS_FHIR_POLL_MODE` | `jdbc` (distro FHIR2 heeft geen Appointment-resource) |
-| `OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED` | `false` |
+| `OPENMRS_FHIR_POLL_MODE` | `fhir` (JDBC-fallback bij 404/geen Appointment) |
+| `OPENMRS_FHIR_SERVER_URL` | `http://hapi-fhir-r5:8080/fhir` (HAPI R5 in compose) |
+| `OPENMRS_FHIR_JDBC_FALLBACK_ENABLED` | `true` |
+| `OPENMRS_SCHEDULING_FHIR_SYNC_ENABLED` | `true` (optioneel SPA → FHIR2) |
 | `APP_ENCRYPTION_KEY` | Exact **32 tekens**, stabiel tussen runs |
 
 ### Snelle scheduling-test (1u-venster)
@@ -74,7 +76,7 @@ Health: http://localhost:8081/actuator/health
 Optioneel: controleer FHIR:
 
 ```powershell
-curl -sS -u admin:Admin123 "http://localhost/openmrs/ws/fhir2/R5/Appointment?_count=5"
+curl -sS "http://localhost:8082/fhir/Appointment?_count=5"
 ```
 
 ---
