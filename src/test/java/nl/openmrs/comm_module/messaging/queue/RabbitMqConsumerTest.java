@@ -1,6 +1,7 @@
 package nl.openmrs.comm_module.messaging.queue;
 
 import nl.openmrs.comm_module.config.OpenmrsFhirProperties;
+import nl.openmrs.comm_module.metrics.MessagingMetrics;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.message_log.MessageLogService;
 import nl.openmrs.comm_module.notification.NotificationDeliveryLogService;
@@ -50,6 +51,9 @@ class RabbitMqConsumerTest {
     private MessageLogService messageLogService;
 
     @Mock
+    private MessagingMetrics messagingMetrics;
+
+    @Mock
     private RabbitMqProducer rabbitMqProducer;
 
     @Mock
@@ -72,6 +76,7 @@ class RabbitMqConsumerTest {
                         providerFactory,
                         deliveryLogService,
                         messageLogService,
+                        messagingMetrics,
                         rabbitMqProducer,
                         polledAppointmentRepository,
                         fhirProperties,
@@ -93,6 +98,8 @@ class RabbitMqConsumerTest {
         consumer.consume(message);
 
         verify(messagingProvider).sendMessage(message, CREDENTIALS_JSON);
+        verify(messagingMetrics).recordDequeued(message);
+        verify(messagingMetrics).recordSendResult(message, result);
         verify(deliveryLogService).recordProviderAttempt(message, result);
         verify(messageLogService).recordProviderAttempt(message, result);
         verify(rabbitMqProducer, never()).publishRetry(message);
@@ -111,6 +118,8 @@ class RabbitMqConsumerTest {
 
         consumer.consume(message);
 
+        verify(messagingMetrics).recordDequeued(message);
+        verify(messagingMetrics).recordSendResult(message, result);
         verify(deliveryLogService).recordProviderAttempt(message, result);
         verify(messageLogService).recordProviderAttempt(message, result);
         verify(rabbitMqProducer).publishRetry(message);
@@ -131,6 +140,8 @@ class RabbitMqConsumerTest {
 
         consumer.consume(message);
 
+        verify(messagingMetrics).recordDequeued(message);
+        verify(messagingMetrics, never()).recordSendResult(any(), any());
         verify(providerFactory, never()).getProvider(any());
         verify(organisationConfigService, never()).getDecryptedCredentials(any(), any());
         verify(deliveryLogService, never()).recordProviderAttempt(any(), any());
@@ -152,6 +163,8 @@ class RabbitMqConsumerTest {
 
         assertThrows(AmqpRejectAndDontRequeueException.class, () -> consumer.consume(message));
 
+        verify(messagingMetrics).recordDequeued(message);
+        verify(messagingMetrics).recordSendResult(eq(message), org.mockito.ArgumentMatchers.argThat(r -> !r.isSuccessful()));
         verify(rabbitMqProducer, never()).publishRetry(message);
     }
 
@@ -166,6 +179,8 @@ class RabbitMqConsumerTest {
 
         assertThrows(AmqpRejectAndDontRequeueException.class, () -> consumer.consume(message));
 
+        verify(messagingMetrics).recordDequeued(message);
+        verify(messagingMetrics).recordSendResult(eq(message), org.mockito.ArgumentMatchers.argThat(r -> !r.isSuccessful()));
         verify(deliveryLogService)
                 .recordProviderAttempt(eq(message), org.mockito.ArgumentMatchers.argThat(r -> !r.isSuccessful()));
         verify(messagingProvider, never()).sendMessage(any(), any());
@@ -181,6 +196,8 @@ class RabbitMqConsumerTest {
 
         consumer.consume(message);
 
+        verify(messagingMetrics).recordDequeued(message);
+        verify(messagingMetrics, never()).recordSendResult(any(), any());
         verify(providerFactory, never()).getProvider(any());
         verify(organisationConfigService, never()).getDecryptedCredentials(any(), any());
         verify(deliveryLogService, never()).recordProviderAttempt(any(), any());
