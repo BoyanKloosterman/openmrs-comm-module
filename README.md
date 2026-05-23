@@ -137,7 +137,7 @@ Besluitvorming over de koppeling staat in [docs/ADR-3-hoe-koppelen-we-aan-openmr
 | **Tijdzone** | SPA slaat tijden vaak als UTC-naive op (`13:05` in DB = `15:05` NL zomer). Zet `OPENMRS_SCHEDULING_SYNC_DB_ZONE=UTC` en `OPENMRS_SCHEDULING_SYNC_ZONE=Europe/Amsterdam`. Verkeerde `dbZone` geeft 2 uur verschil in de logmonitor. |
 | **TLS** | Client-TLS 1.3 is geconfigureerd; zorg dat FHIR- en provider-endpoints geldige certificaten hebben. |
 | **Encryptiesleutel** | Nooit roteren zonder migratieplan voor versleutelde velden. |
-| **Test-endpoints** | `/api/notifications/test` en `/api/test/scheduling` zijn bedoeld voor ontwikkeling/demo — beperk in productie via netwerk of reverse proxy. |
+| **Test-endpoints** | `/api/test/scheduling` en test-GUI (`comm.test-gui.enabled`) zijn bedoeld voor ontwikkeling/demo — zet `COMM_TEST_GUI_ENABLED=false` in productie. |
 | **Docker-referentie ≠ productie** | Lokaal: distro op 80, HAPI op **8082**, comm-module op 8081. Productie: eigen FHIR R5-URL, geen HAPI uit deze compose verplicht. |
 | **HAPI healthcheck** | `hapiproject/hapi` is distroless (geen `curl`); compose gebruikt `service_started`, niet `healthy`. |
 
@@ -233,35 +233,33 @@ Volumes behouden comm-module-data. Volledige reset: `docker compose down -v`.
 
 ## Voorbeeldrequests (oplossing in werking)
 
-### 1. Snelle smoke test — bericht op RabbitMQ
+### 1. Snelle smoke test — status en scheduler
 
-Controleert dat de comm-module draait en een testbericht op de wachtrij zet (daarna verwerkt de consumer richting fake provider in Compose).
+Controleert dat de comm-module draait en de test-API bereikbaar is (vereist `comm.test-gui.enabled=true`, standaard in Docker).
 
-**Linux / macOS / Git Bash:**
+**Status ophalen:**
 
 ```bash
-curl -sS -X POST "http://localhost:8081/api/notifications/test"
+curl -sS http://localhost:8081/api/test/scheduling/status
 ```
-
-**Windows PowerShell:**
 
 ```powershell
-Invoke-RestMethod -Method Post -Uri "http://localhost:8081/api/notifications/test"
+Invoke-RestMethod -Uri "http://localhost:8081/api/test/scheduling/status"
 ```
 
-**Verwachte respons (HTTP 202):**
-
-```text
-Notification queued for provider: SWIFTSEND
-```
-
-Optioneel andere provider:
+**Scheduler handmatig laten lopen** (verwerkt due afspraken uit de database naar RabbitMQ):
 
 ```bash
-curl -sS -X POST "http://localhost:8081/api/notifications/test?provider=SECUREPOST"
+curl -sS -X POST "http://localhost:8081/api/test/scheduling/scheduler"
 ```
 
-Controle in RabbitMQ Management (queue `queue.swiftsend` e.d.) of in de logs van `comm-module-app`:
+```powershell
+Invoke-RestMethod -Method Post -Uri "http://localhost:8081/api/test/scheduling/scheduler"
+```
+
+**Verwachte respons (HTTP 200):** JSON met `success`, `queued` en een korte `message`.
+
+Logs volgen:
 
 ```bash
 docker compose logs -f comm-module
@@ -366,10 +364,12 @@ Start de applicatie met Maven (hostpoort **8080**). Zet minimaal datasource- en 
 ./mvnw spring-boot:run
 ```
 
-Voorbeeldrequest op de host:
+Voorbeeldrequest op de host (FHIR):
 
 ```bash
-curl -sS -X POST http://localhost:8080/api/notifications/test
+curl -sS -X POST http://localhost:8080/api/fhir/messages \
+  -H "Content-Type: application/json" \
+  -d @bundle.json
 ```
 
 ---
@@ -392,7 +392,7 @@ Unit/integration tests:
 ./mvnw test
 ```
 
-Rapportage (Sprint 3): [TESTRAPPORTAGE.md](TESTRAPPORTAGE.md) (**146** tests, kernlogica + FHIR/sync) en [PERFORMANCERAPPORTAGE.md](PERFORMANCERAPPORTAGE.md) (throughput/latency in Docker, bijgewerkt 22-05-2026).
+Rapportage (finale versie): [TESTRAPPORTAGE.md](TESTRAPPORTAGE.md) (**269** tests, lokaal via `mvnw test`) en [PERFORMANCERAPPORTAGE.md](PERFORMANCERAPPORTAGE.md) (throughput/latency in Docker, 23-05-2026).
 
 ---
 
@@ -400,7 +400,7 @@ Rapportage (Sprint 3): [TESTRAPPORTAGE.md](TESTRAPPORTAGE.md) (**146** tests, ke
 
 | Document | Inhoud |
 |----------|--------|
-| [TESTRAPPORTAGE.md](TESTRAPPORTAGE.md) | Unit- en integratietests (scheduler, providers, idempotentie) |
+| [TESTRAPPORTAGE.md](TESTRAPPORTAGE.md) | Alle unit- en integratietests (269), inclusief FHIR US-009/010 |
 | [PERFORMANCERAPPORTAGE.md](PERFORMANCERAPPORTAGE.md) | Throughput, latency en betrouwbaarheid onder belasting |
 | [docs/docker-scheduling-test.md](docs/docker-scheduling-test.md) | End-to-end scheduling in Docker |
 | [docs/fhir-validatie-beheerders.md](docs/fhir-validatie-beheerders.md) | FHIR R5-validatieregels (US-009) voor beheerders |
