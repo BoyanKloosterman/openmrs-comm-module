@@ -49,6 +49,7 @@
 | 003-6 | Afspraken opslaan in PostgreSQL via JPA repository | Backend | 0.5d | feature/US-003-fhir-polling |
 | 003-7 | Foutafhandeling: retry bij offline OpenMRS met logging | Backend | 0.5d | feature/US-003-fhir-polling |
 | 003-8 | Polling-interval configureerbaar per organisatie via application.properties | Config | 0.5d | feature/US-003-fhir-polling |
+| 003-10 | Poll alle actieve FHIR-bronnen (`openmrs.fhir.organisations.*`) per organisatie | Backend | 1d | feature/US-003-fhir-polling |
 | 003-9 | Unit tests voor FHIR-mapper en polling-service | Test | 1d | feature/US-003-fhir-polling |
 
 ### US-017 — Geen notificatie bij geannuleerde afspraak

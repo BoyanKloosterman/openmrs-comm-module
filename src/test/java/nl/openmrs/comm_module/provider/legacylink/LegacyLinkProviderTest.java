@@ -11,9 +11,13 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class LegacyLinkProviderTest {
+
+    private static final String CREDENTIALS_JSON =
+            "{\"username\":\"legacylink-user\",\"password\":\"legacylink-password\"}";
 
     private LegacyLinkClient legacyLinkClient;
     private LegacyLinkProvider legacyLinkProvider;
@@ -38,16 +42,24 @@ class LegacyLinkProviderTest {
                 "2026-05-18T14:00:00Z"
         );
 
-        when(legacyLinkClient.sendSms(any(LegacyLinkSoapRequest.class))).thenReturn(response);
+        when(legacyLinkClient.sendSms(
+                any(LegacyLinkSoapRequest.class),
+                eq("legacylink-user"),
+                eq("legacylink-password")
+        )).thenReturn(response);
 
-        ProviderSendResult result = legacyLinkProvider.sendMessage(createMessage());
+        ProviderSendResult result = legacyLinkProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertTrue(result.isSuccessful());
         assertEquals("SENT", result.getStatus());
         assertEquals("LGC-1234567890ABCDEF", result.getProviderMessageId());
         assertNull(result.getErrorMessage());
 
-        verify(legacyLinkClient).sendSms(any(LegacyLinkSoapRequest.class));
+        verify(legacyLinkClient).sendSms(
+                any(LegacyLinkSoapRequest.class),
+                eq("legacylink-user"),
+                eq("legacylink-password")
+        );
     }
 
     @Test
@@ -59,9 +71,13 @@ class LegacyLinkProviderTest {
                 "2026-05-18T14:00:00Z"
         );
 
-        when(legacyLinkClient.sendSms(any(LegacyLinkSoapRequest.class))).thenReturn(response);
+        when(legacyLinkClient.sendSms(
+                any(LegacyLinkSoapRequest.class),
+                eq("legacylink-user"),
+                eq("legacylink-password")
+        )).thenReturn(response);
 
-        ProviderSendResult result = legacyLinkProvider.sendMessage(createMessage());
+        ProviderSendResult result = legacyLinkProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertFalse(result.isSuccessful());
         assertEquals("FAILED", result.getStatus());
@@ -72,14 +88,28 @@ class LegacyLinkProviderTest {
 
     @Test
     void sendMessageReturnsFailedWhenClientThrowsException() {
-        when(legacyLinkClient.sendSms(any(LegacyLinkSoapRequest.class)))
-                .thenThrow(new LegacyLinkApiException("LegacyLink request failed"));
+        when(legacyLinkClient.sendSms(
+                any(LegacyLinkSoapRequest.class),
+                eq("legacylink-user"),
+                eq("legacylink-password")
+        )).thenThrow(new LegacyLinkApiException("LegacyLink request failed"));
 
-        ProviderSendResult result = legacyLinkProvider.sendMessage(createMessage());
+        ProviderSendResult result = legacyLinkProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertFalse(result.isSuccessful());
         assertEquals("FAILED", result.getStatus());
         assertEquals("LegacyLink request failed", result.getErrorMessage());
+    }
+
+    @Test
+    void sendMessageReturnsFailedWhenCredentialsAreMissing() {
+        ProviderSendResult result = legacyLinkProvider.sendMessage(createMessage(), "{}");
+
+        assertFalse(result.isSuccessful());
+        assertEquals("FAILED", result.getStatus());
+        assertEquals("LegacyLink credentials missing username or password", result.getErrorMessage());
+
+        verify(legacyLinkClient, never()).sendSms(any(), any(), any());
     }
 
     private NotificationQueueMessage createMessage() {

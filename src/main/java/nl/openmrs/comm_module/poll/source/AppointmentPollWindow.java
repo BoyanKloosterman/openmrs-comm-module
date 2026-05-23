@@ -13,7 +13,11 @@ public final class AppointmentPollWindow {
     private AppointmentPollWindow() {}
 
     public static Instant from(Instant now, OpenmrsFhirProperties properties) {
-        return now.minus(Math.max(0, properties.getAppointmentPollSinceDays()), ChronoUnit.DAYS);
+        return from(now, properties.getAppointmentPollSinceDays());
+    }
+
+    public static Instant from(Instant now, int appointmentPollSinceDays) {
+        return now.minus(Math.max(0, appointmentPollSinceDays), ChronoUnit.DAYS);
     }
 
     public static Instant to(Instant now) {

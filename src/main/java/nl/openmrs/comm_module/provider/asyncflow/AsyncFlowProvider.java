@@ -1,5 +1,7 @@
 package nl.openmrs.comm_module.provider.asyncflow;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.provider.MessagingProvider;
 import nl.openmrs.comm_module.provider.MessagingProviderType;
@@ -10,6 +12,7 @@ import org.springframework.stereotype.Component;
 public class AsyncFlowProvider implements MessagingProvider {
 
     private final AsyncFlowClient asyncFlowClient;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AsyncFlowProvider(AsyncFlowClient asyncFlowClient) {
         this.asyncFlowClient = asyncFlowClient;
@@ -21,15 +24,22 @@ public class AsyncFlowProvider implements MessagingProvider {
     }
 
     @Override
-    public ProviderSendResult sendMessage(NotificationQueueMessage message) {
-        AsyncFlowSubmitRequest request = new AsyncFlowSubmitRequest(
-                message.getRecipient(),
-                message.getBody(),
-                "normal"
-        );
-
+    public ProviderSendResult sendMessage(NotificationQueueMessage message, String credentialsJson) {
         try {
-            AsyncFlowSubmitResponse response = asyncFlowClient.submit(request);
+            JsonNode credentials = objectMapper.readTree(credentialsJson);
+            String apiKey = credentials.path("apiKey").asText(null);
+
+            if (apiKey == null || apiKey.isBlank()) {
+                return ProviderSendResult.failed("AsyncFlow credentials missing apiKey");
+            }
+
+            AsyncFlowSubmitRequest request = new AsyncFlowSubmitRequest(
+                    message.getRecipient(),
+                    message.getBody(),
+                    "normal"
+            );
+
+            AsyncFlowSubmitResponse response = asyncFlowClient.submit(request, apiKey);
 
             if (response == null) {
                 return ProviderSendResult.failed("AsyncFlow returned an empty response");
@@ -42,6 +52,10 @@ public class AsyncFlowProvider implements MessagingProvider {
             return ProviderSendResult.submitted(response.getTrackingId());
         } catch (AsyncFlowApiException exception) {
             return ProviderSendResult.failed(exception.getMessage());
+        } catch (Exception exception) {
+            return ProviderSendResult.failed(
+                    "AsyncFlow credential parsing failed: " + exception.getMessage()
+            );
         }
     }
 }

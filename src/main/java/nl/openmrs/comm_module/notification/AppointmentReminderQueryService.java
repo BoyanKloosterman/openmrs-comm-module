@@ -1,8 +1,8 @@
 package nl.openmrs.comm_module.notification;
 
 import nl.openmrs.comm_module.config.NotificationSchedulerProperties;
-import nl.openmrs.comm_module.config.OpenmrsFhirProperties;
 import nl.openmrs.comm_module.notification.reminder.AppointmentReminderSpec;
+import nl.openmrs.comm_module.scheduling.OpenmrsPollOrganisationScope;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
 import org.springframework.stereotype.Service;
@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 /** US-001/002: appointments in herinneringsvenster voor een gegeven spec. */
@@ -17,19 +18,19 @@ import java.util.List;
 public class AppointmentReminderQueryService {
 
     private final PolledAppointmentRepository polledAppointmentRepository;
-    private final OpenmrsFhirProperties fhirProperties;
+    private final OpenmrsPollOrganisationScope pollOrganisationScope;
     private final NotificationSchedulerProperties schedulerProperties;
     private final AppointmentReminderEligibilityService eligibilityService;
     private final Clock clock;
 
     public AppointmentReminderQueryService(
             PolledAppointmentRepository polledAppointmentRepository,
-            OpenmrsFhirProperties fhirProperties,
+            OpenmrsPollOrganisationScope pollOrganisationScope,
             NotificationSchedulerProperties schedulerProperties,
             AppointmentReminderEligibilityService eligibilityService,
             Clock clock) {
         this.polledAppointmentRepository = polledAppointmentRepository;
-        this.fhirProperties = fhirProperties;
+        this.pollOrganisationScope = pollOrganisationScope;
         this.schedulerProperties = schedulerProperties;
         this.eligibilityService = eligibilityService;
         this.clock = clock;
@@ -48,11 +49,11 @@ public class AppointmentReminderQueryService {
         Instant windowStart = target.minus(halfWindow);
         Instant windowEnd = target.plus(halfWindow);
 
-        return polledAppointmentRepository
-                .findDueForReminderWindow(
-                        fhirProperties.getOrganisationId(), now, windowStart, windowEnd)
-                .stream()
-                .filter(a -> eligibilityService.maySendReminder(a, now))
-                .toList();
+        List<PolledAppointmentEntity> due = new ArrayList<>();
+        for (String organisationId : pollOrganisationScope.activeOrganisationIds()) {
+            due.addAll(polledAppointmentRepository.findDueForReminderWindow(
+                    organisationId, now, windowStart, windowEnd));
+        }
+        return due.stream().filter(a -> eligibilityService.maySendReminder(a, now)).toList();
     }
 }

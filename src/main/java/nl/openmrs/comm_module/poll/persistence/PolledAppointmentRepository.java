@@ -36,4 +36,7 @@ public interface PolledAppointmentRepository extends JpaRepository<PolledAppoint
             WHERE a.appointmentDatetime < :cutoff
             """)
     int deleteOlderThan(@Param("cutoff") Instant cutoff);
+    /** Rijen die nog in DB staan maar niet meer in de toekomst liggen (US-003). */
+    List<PolledAppointmentEntity> findByOrganisationIdAndAppointmentDatetimeLessThanEqual(
+            String organisationId, Instant cutoff);
 }

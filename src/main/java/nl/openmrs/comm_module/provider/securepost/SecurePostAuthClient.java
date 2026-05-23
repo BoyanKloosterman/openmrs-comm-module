@@ -11,26 +11,20 @@ public class SecurePostAuthClient {
 
     private final RestClient restClient;
     private final String studentGroup;
-    private final String clientId;
-    private final String clientSecret;
 
     public SecurePostAuthClient(
             RestClient.Builder restClientBuilder,
             @Value("${providers.base-url}") String providersBaseUrl,
-            @Value("${providers.student-group}") String studentGroup,
-            @Value("${providers.securepost.client-id}") String clientId,
-            @Value("${providers.securepost.client-secret}") String clientSecret
+            @Value("${providers.student-group}") String studentGroup
     ) {
         this.restClient = restClientBuilder
                 .baseUrl(providersBaseUrl)
                 .build();
 
         this.studentGroup = studentGroup;
-        this.clientId = clientId;
-        this.clientSecret = clientSecret;
     }
 
-    public String getToken() {
+    public String getToken(String clientId, String clientSecret) {
         try {
             SecurePostTokenResponse response = restClient.post()
                     .uri("/securepost/auth")

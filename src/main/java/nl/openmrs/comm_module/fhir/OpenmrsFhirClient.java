@@ -8,34 +8,27 @@ import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceGoneException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.hl7.fhir.instance.model.api.IBaseBundle;
+import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r5.model.Appointment;
 import org.hl7.fhir.r5.model.Bundle;
 import org.hl7.fhir.r5.model.CapabilityStatement;
 import org.hl7.fhir.r5.model.Patient;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
-@Component
+/** Ruwe HAPI FHIR R5-client voor één organisatie-bron. */
 public class OpenmrsFhirClient implements OpenmrsFhirOperations {
 
     private final IGenericClient client;
 
-    public OpenmrsFhirClient(
-            @Qualifier("fhirContextR5") FhirContext fhirContext,
-            @Value("${openmrs.fhir.server-url}") String fhirServerUrl,
-            @Value("${openmrs.fhir.username}") String fhirUsername,
-            @Value("${openmrs.fhir.password}") String fhirPassword) {
-        this.client = fhirContext.newRestfulGenericClient(fhirServerUrl);
-        // Alleen bij credentials (OpenMRS); standalone HAPI R5 in Docker heeft geen auth
-        if (fhirUsername != null && !fhirUsername.isBlank()) {
-            this.client.registerInterceptor(new BasicAuthInterceptor(fhirUsername, fhirPassword));
+    public OpenmrsFhirClient(FhirContext fhirContext, OrganisationFhirConnection connection) {
+        this.client = fhirContext.newRestfulGenericClient(connection.serverUrl());
+        if (connection.hasAuth()) {
+            this.client.registerInterceptor(
+                    new BasicAuthInterceptor(connection.username(), connection.password()));
         }
     }
 
@@ -130,7 +123,7 @@ public class OpenmrsFhirClient implements OpenmrsFhirOperations {
         if (patient == null || !patient.hasId()) {
             throw new IllegalArgumentException("Patient zonder id");
         }
-        client.update().resource(patient).execute();
+        upsertResource(patient);
     }
 
     @Override
@@ -138,6 +131,21 @@ public class OpenmrsFhirClient implements OpenmrsFhirOperations {
         if (appointment == null || !appointment.hasId()) {
             throw new IllegalArgumentException("Appointment zonder id");
         }
-        client.update().resource(appointment).execute();
+        upsertResource(appointment);
+    }
+
+    /** UPDATE; bij 404 CREATE (OpenMRS FHIR2 heeft resource vaak nog niet). */
+    private void upsertResource(IBaseResource resource) {
+        try {
+            client.update().resource(resource).execute();
+        } catch (ResourceNotFoundException e) {
+            client.create().resource(resource).execute();
+        } catch (BaseServerResponseException e) {
+            if (e.getStatusCode() == 404) {
+                client.create().resource(resource).execute();
+                return;
+            }
+            throw e;
+        }
     }
 }
