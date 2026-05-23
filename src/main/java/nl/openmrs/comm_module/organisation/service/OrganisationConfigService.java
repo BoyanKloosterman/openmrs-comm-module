@@ -1,5 +1,6 @@
 package nl.openmrs.comm_module.organisation.service;
 
+import nl.openmrs.comm_module.common.encryption.PgCryptoService;
 import nl.openmrs.comm_module.organisation.dto.OrganisationConfigRequest;
 import nl.openmrs.comm_module.organisation.dto.OrganisationConfigResponse;
 import nl.openmrs.comm_module.organisation.dto.OrganisationProviderConfigRequest;
@@ -10,7 +11,7 @@ import nl.openmrs.comm_module.persistence.entity.OrganisationProviderConfigEntit
 import nl.openmrs.comm_module.provider.MessagingProviderType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import nl.openmrs.comm_module.common.encryption.PgCryptoService;
+
 import java.util.Comparator;
 import java.util.List;
 
@@ -32,10 +33,19 @@ public class OrganisationConfigService {
     public OrganisationConfigResponse saveConfig(OrganisationConfigRequest request) {
         OrganisationConfigEntity entity = organisationConfigRepository
                 .findByOrganisationId(request.getOrganisationId())
-                .orElseGet(() -> new OrganisationConfigEntity(request.getOrganisationId(), request.isActive()));
+                .orElseGet(() -> new OrganisationConfigEntity(
+                        request.getOrganisationId(),
+                        request.isActive()
+                ));
 
         entity.setOrganisationId(request.getOrganisationId());
         entity.setActive(request.isActive());
+
+        String timezone = request.getTimezone();
+        if (timezone == null || timezone.isBlank()) {
+            timezone = "Europe/Amsterdam";
+        }
+        entity.setTimezone(timezone);
 
         entity.getProviders().clear();
 
@@ -61,39 +71,20 @@ public class OrganisationConfigService {
     public OrganisationConfigResponse getConfig(String organisationId) {
         OrganisationConfigEntity entity = organisationConfigRepository
                 .findByOrganisationId(organisationId)
-                .orElseThrow(() -> new IllegalArgumentException("Organisation config not found: " + organisationId));
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Organisation config not found: " + organisationId
+                ));
 
         return toResponse(entity);
-    }
-
-    private OrganisationConfigResponse toResponse(OrganisationConfigEntity entity) {
-        List<OrganisationProviderConfigResponse> providerResponses = entity.getProviders()
-                .stream()
-                .sorted(Comparator.comparingInt(OrganisationProviderConfigEntity::getPriority))
-                .map(provider -> new OrganisationProviderConfigResponse(
-                        provider.getId(),
-                        provider.getProviderType(),
-                        provider.isEnabled(),
-                        provider.getPriority(),
-                        provider.getEncryptedCredentials() != null && !provider.getEncryptedCredentials().isBlank()
-                ))
-                .toList();
-
-        return new OrganisationConfigResponse(
-                entity.getId(),
-                entity.getOrganisationId(),
-                entity.isActive(),
-                providerResponses,
-                entity.getCreatedAt(),
-                entity.getUpdatedAt()
-        );
     }
 
     @Transactional(readOnly = true)
     public List<OrganisationProviderConfigResponse> getEnabledProviders(String organisationId) {
         OrganisationConfigEntity entity = organisationConfigRepository
                 .findByOrganisationId(organisationId)
-                .orElseThrow(() -> new IllegalArgumentException("Organisation config not found: " + organisationId));
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Organisation config not found: " + organisationId
+                ));
 
         return entity.getProviders()
                 .stream()
@@ -104,7 +95,8 @@ public class OrganisationConfigService {
                         provider.getProviderType(),
                         provider.isEnabled(),
                         provider.getPriority(),
-                        provider.getEncryptedCredentials() != null && !provider.getEncryptedCredentials().isBlank()
+                        provider.getEncryptedCredentials() != null
+                                && !provider.getEncryptedCredentials().isBlank()
                 ))
                 .toList();
     }
@@ -123,10 +115,37 @@ public class OrganisationConfigService {
                 .filter(p -> p.getProviderType() == providerType)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(
-                        "No enabled provider config found for provider " + providerType
-                                + " in organisation " + organisationId
+                        "No enabled provider config found for provider "
+                                + providerType
+                                + " in organisation "
+                                + organisationId
                 ));
 
         return pgCryptoService.decrypt(provider.getEncryptedCredentials());
+    }
+
+    private OrganisationConfigResponse toResponse(OrganisationConfigEntity entity) {
+        List<OrganisationProviderConfigResponse> providerResponses = entity.getProviders()
+                .stream()
+                .sorted(Comparator.comparingInt(OrganisationProviderConfigEntity::getPriority))
+                .map(provider -> new OrganisationProviderConfigResponse(
+                        provider.getId(),
+                        provider.getProviderType(),
+                        provider.isEnabled(),
+                        provider.getPriority(),
+                        provider.getEncryptedCredentials() != null
+                                && !provider.getEncryptedCredentials().isBlank()
+                ))
+                .toList();
+
+        return new OrganisationConfigResponse(
+                entity.getId(),
+                entity.getOrganisationId(),
+                entity.isActive(),
+                entity.getTimezone(),
+                providerResponses,
+                entity.getCreatedAt(),
+                entity.getUpdatedAt()
+        );
     }
 }
