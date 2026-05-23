@@ -2,6 +2,7 @@ package nl.openmrs.comm_module.messaging.queue;
 
 import nl.openmrs.comm_module.config.OpenmrsFhirProperties;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
+import nl.openmrs.comm_module.message_log.MessageLogService;
 import nl.openmrs.comm_module.notification.NotificationDeliveryLogService;
 import nl.openmrs.comm_module.organisation.dto.OrganisationProviderConfigResponse;
 import nl.openmrs.comm_module.organisation.service.OrganisationConfigService;
@@ -26,6 +27,7 @@ public class RabbitMqConsumer {
 
     private final MessagingProviderFactory providerFactory;
     private final NotificationDeliveryLogService deliveryLogService;
+    private final MessageLogService messageLogService;
     private final RabbitMqProducer rabbitMqProducer;
     private final PolledAppointmentRepository polledAppointmentRepository;
     private final OpenmrsFhirProperties fhirProperties;
@@ -36,6 +38,7 @@ public class RabbitMqConsumer {
     public RabbitMqConsumer(
             MessagingProviderFactory providerFactory,
             NotificationDeliveryLogService deliveryLogService,
+            MessageLogService messageLogService,
             RabbitMqProducer rabbitMqProducer,
             PolledAppointmentRepository polledAppointmentRepository,
             OpenmrsFhirProperties fhirProperties,
@@ -43,6 +46,7 @@ public class RabbitMqConsumer {
             @Value("${messaging.retry.max-attempts}") int maxAttempts) {
         this.providerFactory = providerFactory;
         this.deliveryLogService = deliveryLogService;
+        this.messageLogService = messageLogService;
         this.rabbitMqProducer = rabbitMqProducer;
         this.polledAppointmentRepository = polledAppointmentRepository;
         this.fhirProperties = fhirProperties;
@@ -88,6 +92,7 @@ public class RabbitMqConsumer {
 
         ProviderSendResult result = provider.sendMessage(message, credentialsJson);
         deliveryLogService.recordProviderAttempt(message, result);
+        messageLogService.recordProviderAttempt(message, result);
 
         if (!result.isSuccessful()) {
             handleFailedMessage(message, result);
