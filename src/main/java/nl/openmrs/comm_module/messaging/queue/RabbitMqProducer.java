@@ -1,6 +1,7 @@
 package nl.openmrs.comm_module.messaging.queue;
 
 import nl.openmrs.comm_module.config.RabbitMqConfig;
+import nl.openmrs.comm_module.metrics.MessagingMetrics;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,17 +11,20 @@ import org.springframework.stereotype.Service;
 public class RabbitMqProducer {
 
     private final RabbitTemplate rabbitTemplate;
+    private final MessagingMetrics metrics;
     private final long initialDelayMs;
     private final double multiplier;
     private final long maxDelayMs;
 
     public RabbitMqProducer(
             RabbitTemplate rabbitTemplate,
+            MessagingMetrics metrics,
             @Value("${messaging.retry.initial-delay-ms}") long initialDelayMs,
             @Value("${messaging.retry.multiplier}") double multiplier,
             @Value("${messaging.retry.max-delay-ms}") long maxDelayMs
     ) {
         this.rabbitTemplate = rabbitTemplate;
+        this.metrics = metrics;
         this.initialDelayMs = initialDelayMs;
         this.multiplier = multiplier;
         this.maxDelayMs = maxDelayMs;
@@ -28,6 +32,7 @@ public class RabbitMqProducer {
 
     public void publish(NotificationQueueMessage message) {
         sendToProviderQueue(message);
+        metrics.recordQueued(message, false);
     }
 
     public void publishRetry(NotificationQueueMessage message) {
@@ -42,6 +47,8 @@ public class RabbitMqProducer {
                     return rabbitMessage;
                 }
         );
+
+        metrics.recordQueued(message, true);
 
         System.out.println("Retry message published with delay: " + delayMs + " ms");
     }

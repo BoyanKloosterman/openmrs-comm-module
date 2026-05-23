@@ -1,11 +1,13 @@
 package nl.openmrs.comm_module.messaging.queue;
 
 import nl.openmrs.comm_module.config.OpenmrsFhirProperties;
+import nl.openmrs.comm_module.metrics.MessagingMetrics;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
 import nl.openmrs.comm_module.message_log.MessageLogService;
 import nl.openmrs.comm_module.notification.NotificationDeliveryLogService;
 import nl.openmrs.comm_module.organisation.dto.OrganisationProviderConfigResponse;
 import nl.openmrs.comm_module.organisation.service.OrganisationConfigService;
+import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentRepository;
 import nl.openmrs.comm_module.provider.MessagingProvider;
 import nl.openmrs.comm_module.provider.MessagingProviderFactory;
@@ -28,6 +30,7 @@ public class RabbitMqConsumer {
     private final MessagingProviderFactory providerFactory;
     private final NotificationDeliveryLogService deliveryLogService;
     private final MessageLogService messageLogService;
+    private final MessagingMetrics messagingMetrics;
     private final RabbitMqProducer rabbitMqProducer;
     private final PolledAppointmentRepository polledAppointmentRepository;
     private final OpenmrsFhirProperties fhirProperties;
@@ -39,6 +42,7 @@ public class RabbitMqConsumer {
             MessagingProviderFactory providerFactory,
             NotificationDeliveryLogService deliveryLogService,
             MessageLogService messageLogService,
+            MessagingMetrics messagingMetrics,
             RabbitMqProducer rabbitMqProducer,
             PolledAppointmentRepository polledAppointmentRepository,
             OpenmrsFhirProperties fhirProperties,
@@ -47,6 +51,7 @@ public class RabbitMqConsumer {
         this.providerFactory = providerFactory;
         this.deliveryLogService = deliveryLogService;
         this.messageLogService = messageLogService;
+        this.messagingMetrics = messagingMetrics;
         this.rabbitMqProducer = rabbitMqProducer;
         this.polledAppointmentRepository = polledAppointmentRepository;
         this.fhirProperties = fhirProperties;
@@ -56,6 +61,8 @@ public class RabbitMqConsumer {
 
     @RabbitListener(queues = "#{'${messaging.queues}'.split(',')}")
     public void consume(NotificationQueueMessage message) {
+        messagingMetrics.recordDequeued(message);
+
         if (!deliveryLogService.hasQueuedDeliveryRecord(message.getNotificationId())) {
             log.info(
                     "Notificatie overgeslagen (geen QUEUED meer): appointment={} notificationId={}",
@@ -87,12 +94,13 @@ public class RabbitMqConsumer {
                     error);
             ProviderSendResult configFailure = ProviderSendResult.failed(error);
             deliveryLogService.recordProviderAttempt(message, configFailure);
+            messagingMetrics.recordSendResult(message, configFailure);
             throw new AmqpRejectAndDontRequeueException(error, e);
         }
-
         ProviderSendResult result = provider.sendMessage(message, credentialsJson);
         deliveryLogService.recordProviderAttempt(message, result);
         messageLogService.recordProviderAttempt(message, result);
+        messagingMetrics.recordSendResult(message, result);
 
         if (!result.isSuccessful()) {
             handleFailedMessage(message, result);
@@ -107,7 +115,7 @@ public class RabbitMqConsumer {
         return polledAppointmentRepository
                 .findByOrganisationIdAndAppointmentFhirId(
                         fhirProperties.getOrganisationId(), appointmentFhirId)
-                .map(a -> a.isVoided())
+                .map(PolledAppointmentEntity::isVoided)
                 .orElse(false);
     }
 
