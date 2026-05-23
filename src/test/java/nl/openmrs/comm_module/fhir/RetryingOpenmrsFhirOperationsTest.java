@@ -1,7 +1,7 @@
 package nl.openmrs.comm_module.fhir;
 
 import nl.openmrs.comm_module.config.OpenmrsFhirProperties;
-import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r5.model.Patient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -9,6 +9,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
+import java.util.Optional;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.times;
@@ -35,13 +37,15 @@ class RetryingOpenmrsFhirOperationsTest {
 
     @Test
     void slaagtNaTijdelijkeFout() {
-        Bundle ok = new Bundle();
-        when(delegate.searchEncountersSince("2026-01-01"))
+        Patient patient = new Patient();
+        patient.setId("p1");
+        Optional<Patient> ok = Optional.of(patient);
+        when(delegate.readPatientByLogicalId("p1"))
                 .thenThrow(tijdelijk("1"))
                 .thenReturn(ok);
 
-        assertEquals(ok, retrying.searchEncountersSince("2026-01-01"));
-        verify(delegate, times(2)).searchEncountersSince("2026-01-01");
+        assertEquals(ok, retrying.readPatientByLogicalId("p1"));
+        verify(delegate, times(2)).readPatientByLogicalId("p1");
     }
 
     @Test

@@ -10,27 +10,25 @@ import org.springframework.web.client.RestClientResponseException;
 public class LegacyLinkClient {
 
     private final RestClient restClient;
-    private final String username;
-    private final String password;
     private final String studentGroup;
 
     public LegacyLinkClient(
             RestClient.Builder restClientBuilder,
             @Value("${providers.base-url}") String providersBaseUrl,
-            @Value("${providers.legacylink.username}") String username,
-            @Value("${providers.legacylink.password}") String password,
             @Value("${providers.student-group}") String studentGroup
     ) {
         this.restClient = restClientBuilder
                 .baseUrl(providersBaseUrl)
                 .build();
 
-        this.username = username;
-        this.password = password;
         this.studentGroup = studentGroup;
     }
 
-    public LegacyLinkSoapResponse sendSms(LegacyLinkSoapRequest request) {
+    public LegacyLinkSoapResponse sendSms(
+            LegacyLinkSoapRequest request,
+            String username,
+            String password
+    ) {
         try {
             String responseXml = restClient.post()
                     .uri("/LegacyLink/SendSms")

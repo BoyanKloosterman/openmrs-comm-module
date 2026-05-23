@@ -11,9 +11,13 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class SecurePostProviderTest {
+
+    private static final String CREDENTIALS_JSON =
+            "{\"clientId\":\"securepost-client\",\"clientSecret\":\"securepost-secret-key\"}";
 
     private SecurePostClient securePostClient;
     private SecurePostProvider securePostProvider;
@@ -35,23 +39,35 @@ class SecurePostProviderTest {
         when(response.isDelivered()).thenReturn(true);
         when(response.getTrackingId()).thenReturn("TRACK-123");
 
-        when(securePostClient.send(any(SecurePostRequest.class))).thenReturn(response);
+        when(securePostClient.send(
+                any(SecurePostRequest.class),
+                eq("securepost-client"),
+                eq("securepost-secret-key")
+        )).thenReturn(response);
 
-        ProviderSendResult result = securePostProvider.sendMessage(createMessage());
+        ProviderSendResult result = securePostProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertTrue(result.isSuccessful());
         assertEquals("SENT", result.getStatus());
         assertEquals("TRACK-123", result.getProviderMessageId());
         assertNull(result.getErrorMessage());
 
-        verify(securePostClient).send(any(SecurePostRequest.class));
+        verify(securePostClient).send(
+                any(SecurePostRequest.class),
+                eq("securepost-client"),
+                eq("securepost-secret-key")
+        );
     }
 
     @Test
     void sendMessageReturnsFailedWhenResponseIsNull() {
-        when(securePostClient.send(any(SecurePostRequest.class))).thenReturn(null);
+        when(securePostClient.send(
+                any(SecurePostRequest.class),
+                eq("securepost-client"),
+                eq("securepost-secret-key")
+        )).thenReturn(null);
 
-        ProviderSendResult result = securePostProvider.sendMessage(createMessage());
+        ProviderSendResult result = securePostProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertFalse(result.isSuccessful());
         assertEquals("FAILED", result.getStatus());
@@ -64,9 +80,13 @@ class SecurePostProviderTest {
         when(response.isDelivered()).thenReturn(false);
         when(response.getErrorMessage()).thenReturn("Delivery failed");
 
-        when(securePostClient.send(any(SecurePostRequest.class))).thenReturn(response);
+        when(securePostClient.send(
+                any(SecurePostRequest.class),
+                eq("securepost-client"),
+                eq("securepost-secret-key")
+        )).thenReturn(response);
 
-        ProviderSendResult result = securePostProvider.sendMessage(createMessage());
+        ProviderSendResult result = securePostProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertFalse(result.isSuccessful());
         assertEquals("FAILED", result.getStatus());
@@ -76,14 +96,28 @@ class SecurePostProviderTest {
 
     @Test
     void sendMessageReturnsFailedWhenClientThrowsException() {
-        when(securePostClient.send(any(SecurePostRequest.class)))
-                .thenThrow(new SecurePostApiException("SecurePost API error"));
+        when(securePostClient.send(
+                any(SecurePostRequest.class),
+                eq("securepost-client"),
+                eq("securepost-secret-key")
+        )).thenThrow(new SecurePostApiException("SecurePost API error"));
 
-        ProviderSendResult result = securePostProvider.sendMessage(createMessage());
+        ProviderSendResult result = securePostProvider.sendMessage(createMessage(), CREDENTIALS_JSON);
 
         assertFalse(result.isSuccessful());
         assertEquals("FAILED", result.getStatus());
         assertEquals("SecurePost API error", result.getErrorMessage());
+    }
+
+    @Test
+    void sendMessageReturnsFailedWhenCredentialsAreMissing() {
+        ProviderSendResult result = securePostProvider.sendMessage(createMessage(), "{}");
+
+        assertFalse(result.isSuccessful());
+        assertEquals("FAILED", result.getStatus());
+        assertEquals("SecurePost credentials missing clientId or clientSecret", result.getErrorMessage());
+
+        verify(securePostClient, never()).send(any(), any(), any());
     }
 
     private NotificationQueueMessage createMessage() {

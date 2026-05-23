@@ -27,8 +27,12 @@ public class SecurePostClient {
         this.studentGroup = studentGroup;
     }
 
-    public SecurePostResponse send(SecurePostRequest request) {
-        String token = authClient.getToken();
+    public SecurePostResponse send(
+            SecurePostRequest request,
+            String clientId,
+            String clientSecret
+    ) {
+        String token = authClient.getToken(clientId, clientSecret);
 
         try {
             return restClient.post()

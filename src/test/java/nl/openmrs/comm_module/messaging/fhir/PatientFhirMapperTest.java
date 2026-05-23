@@ -2,7 +2,7 @@ package nl.openmrs.comm_module.messaging.fhir;
 
 import ca.uhn.fhir.context.FhirContext;
 import nl.openmrs.comm_module.messaging.fhir.dto.PatientPollDto;
-import org.hl7.fhir.r4.model.Patient;
+import org.hl7.fhir.r5.model.Patient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -45,7 +45,7 @@ class PatientFhirMapperTest {
     }
 
     private static Patient parsePatientFixture(String classpathPath) throws Exception {
-        FhirContext ctx = FhirContext.forR4();
+        FhirContext ctx = FhirContext.forR5();
         try (InputStream in = PatientFhirMapperTest.class.getClassLoader().getResourceAsStream(classpathPath)) {
             assertNotNull(in);
             String json = new String(in.readAllBytes(), StandardCharsets.UTF_8);

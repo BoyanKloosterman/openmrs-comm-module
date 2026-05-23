@@ -4,6 +4,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import javax.sql.DataSource;
+
 @Service
 public class PgCryptoService {
 
@@ -11,10 +13,10 @@ public class PgCryptoService {
     private final String encryptionKey;
 
     public PgCryptoService(
-            JdbcTemplate jdbcTemplate,
+            DataSource dataSource,
             @Value("${app.encryption.key}") String encryptionKey
     ) {
-        this.jdbcTemplate = jdbcTemplate;
+        this.jdbcTemplate = new JdbcTemplate(dataSource);
         this.encryptionKey = encryptionKey;
     }
 
@@ -24,7 +26,7 @@ public class PgCryptoService {
         }
 
         return jdbcTemplate.queryForObject(
-                "SELECT encode(pgp_sym_encrypt(?, ?), 'base64')",
+                "SELECT encode(pgp_sym_encrypt(?::text, ?::text), 'base64')",
                 String.class,
                 plainText,
                 encryptionKey
@@ -37,7 +39,7 @@ public class PgCryptoService {
         }
 
         return jdbcTemplate.queryForObject(
-                "SELECT pgp_sym_decrypt(decode(?, 'base64'), ?)",
+                "SELECT pgp_sym_decrypt(decode(?::text, 'base64'), ?::text)",
                 String.class,
                 encryptedText,
                 encryptionKey

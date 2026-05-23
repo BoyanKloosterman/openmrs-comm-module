@@ -1,10 +1,10 @@
 package nl.openmrs.comm_module.messaging.fhir;
 
 import nl.openmrs.comm_module.messaging.fhir.dto.PatientPollDto;
-import org.hl7.fhir.r4.model.ContactPoint;
-import org.hl7.fhir.r4.model.HumanName;
-import org.hl7.fhir.r4.model.Patient;
-import org.hl7.fhir.r4.model.StringType;
+import org.hl7.fhir.r5.model.ContactPoint;
+import org.hl7.fhir.r5.model.HumanName;
+import org.hl7.fhir.r5.model.Patient;
+import org.hl7.fhir.r5.model.StringType;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 @Component
 public class PatientFhirMapper {
 
-    /** Mapt FHIR Patient naar poll-DTO; leeg zonder bruikbare id. */
+    /** Mapt FHIR R5 Patient naar poll-DTO; leeg zonder bruikbare id. */
     public Optional<PatientPollDto> mapPatient(Patient patient) {
         if (patient == null || !patient.hasId()) {
             return Optional.empty();
