@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Scheduling &amp; Messaging — test</title>
+  <title>Scheduling — logmonitor</title>
   <style>
     :root {
       --bg: #0f1419;
@@ -13,7 +13,7 @@
       --muted: #8b9cb3;
       --accent: #3d8bfd;
       --ok: #3dd68c;
-      --warn: #f5c542;
+      --warn: #fbbf24;
       --err: #f87171;
     }
     * { box-sizing: border-box; }
@@ -31,17 +31,14 @@
     }
     header h1 { margin: 0; font-size: 1.25rem; font-weight: 600; }
     header p { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.875rem; }
-    main { padding: 1rem 1.5rem 2rem; max-width: 1400px; margin: 0 auto; }
-    .grid { display: grid; gap: 1rem; }
-    @media (min-width: 900px) {
-      .grid-2 { grid-template-columns: 1fr 1fr; }
-      .grid-3 { grid-template-columns: 2fr 1fr; }
-    }
+    header a { color: var(--accent); }
+    main { padding: 1rem 1.5rem 2rem; max-width: 1280px; margin: 0 auto; }
     .card {
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 1rem;
+      margin-bottom: 1rem;
     }
     .card h2 {
       margin: 0 0 0.75rem;
@@ -50,52 +47,123 @@
       letter-spacing: 0.04em;
       color: var(--muted);
     }
-    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
-    input[type="text"], input[type="tel"], select, textarea {
-      width: 100%;
-      padding: 0.5rem 0.6rem;
+    .card h3 {
+      margin: 0 0 0.5rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .card h3:not(:first-child) { margin-top: 1rem; }
+
+    /* Samenvatting bovenaan */
+    .summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    .summary-badge {
+      font-size: 1.1rem;
+      font-weight: 700;
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
       border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--bg);
-      color: var(--text);
-      margin-bottom: 0.6rem;
+      white-space: nowrap;
     }
-    .btn-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
-    button {
-      cursor: pointer;
-      border: none;
+    .summary-badge.ok { color: var(--ok); border-color: var(--ok); background: rgba(61, 214, 140, 0.08); }
+    .summary-badge.warn { color: var(--warn); border-color: var(--warn); background: rgba(251, 191, 36, 0.08); }
+    .summary-badge.err { color: var(--err); border-color: var(--err); background: rgba(248, 113, 113, 0.08); }
+    .summary-text { flex: 1; min-width: 200px; }
+    .summary-text .line1 { font-size: 1rem; font-weight: 600; margin: 0 0 0.25rem; }
+    .summary-text .line2 { margin: 0; font-size: 0.85rem; color: var(--muted); }
+    .alert {
+      margin-top: 0.75rem;
+      padding: 0.6rem 0.85rem;
       border-radius: 6px;
-      padding: 0.5rem 0.85rem;
-      font-size: 0.875rem;
-      font-weight: 500;
-    }
-    .btn-primary { background: var(--accent); color: #fff; }
-    .btn-secondary { background: var(--border); color: var(--text); }
-    .btn-danger { background: #5c2a2a; color: #fecaca; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .status-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-      gap: 0.5rem;
       font-size: 0.85rem;
+      border: 1px solid var(--border);
+      background: rgba(61, 139, 253, 0.06);
     }
-    .status-grid dt { color: var(--muted); margin: 0; }
-    .status-grid dd { margin: 0 0 0.5rem; font-weight: 500; }
-    .window-bar {
-      height: 12px;
-      background: var(--bg);
-      border-radius: 6px;
-      margin: 0.75rem 0;
-      position: relative;
-      overflow: hidden;
+    .alert.warn { border-color: var(--warn); color: var(--warn); background: rgba(251, 191, 36, 0.06); }
+    .alert.err { border-color: var(--err); color: var(--err); background: rgba(248, 113, 113, 0.06); }
+
+    /* Groepen met compacte rijen */
+    .kv-rows { font-size: 0.85rem; }
+    .kv-row {
+      display: grid;
+      grid-template-columns: 11rem 1fr;
+      gap: 0.5rem;
+      padding: 0.35rem 0;
+      border-bottom: 1px solid rgba(45, 58, 79, 0.5);
     }
-    .window-fill {
-      position: absolute;
-      height: 100%;
-      background: linear-gradient(90deg, #2563eb, var(--ok));
-      border-radius: 6px;
-      opacity: 0.85;
+    .kv-row:last-child { border-bottom: none; }
+    .kv-row dt { margin: 0; color: var(--muted); }
+    .kv-row dd { margin: 0; font-weight: 500; word-break: break-word; }
+    .kv-row dd.ok { color: var(--ok); }
+    .kv-row dd.warn { color: var(--warn); }
+    .kv-row dd.err { color: var(--err); }
+    .kv-row dd.mono { font-family: ui-monospace, monospace; font-size: 0.8rem; color: var(--accent); }
+
+    /* Poll-pijplijn: ruw → gemapt → opgeslagen */
+    .funnel {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: stretch;
+      gap: 0.5rem;
+      margin: 0.5rem 0 0.75rem;
     }
+    .funnel-step {
+      flex: 1;
+      min-width: 5.5rem;
+      text-align: center;
+      padding: 0.65rem 0.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.15);
+    }
+    .funnel-step .num {
+      display: block;
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+    .funnel-step .lbl {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 0.2rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .funnel-arrow {
+      align-self: center;
+      color: var(--muted);
+      font-size: 1.25rem;
+      padding: 0 0.15rem;
+    }
+    .funnel-skips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .funnel-skips span {
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border);
+    }
+    .funnel-skips strong { color: var(--text); }
+
+    .cols-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -105,34 +173,56 @@
       text-align: left;
       padding: 0.45rem 0.5rem;
       border-bottom: 1px solid var(--border);
+      vertical-align: top;
     }
     th { color: var(--muted); font-weight: 500; }
-    tr { cursor: pointer; }
-    tr:hover td { background: rgba(61, 139, 253, 0.08); }
-    tr.selected td { background: rgba(61, 139, 253, 0.15); }
-    .badge {
-      display: inline-block;
-      padding: 0.15rem 0.45rem;
-      border-radius: 4px;
-      font-size: 0.7rem;
-      font-weight: 600;
-    }
-    .badge-in { background: #14532d; color: var(--ok); }
-    .badge-early, .badge-late { background: #422006; color: var(--warn); }
-    .badge-past, .badge-void { background: #3f1d1d; color: var(--err); }
-    .badge-phone { background: #1e3a5f; color: #93c5fd; }
-    .badge-sent { background: #312e81; color: #c4b5fd; }
-    .message-box {
-      white-space: pre-wrap;
-      font-family: ui-monospace, monospace;
-      font-size: 0.8rem;
-      background: var(--bg);
-      border: 1px solid var(--border);
+    tr.ok td { color: var(--ok); }
+    tr.sent td { color: var(--muted); }
+    tr.fail td { color: var(--err); }
+    tr.warn td { color: var(--warn); }
+
+    button {
+      cursor: pointer;
+      border: none;
       border-radius: 6px;
-      padding: 0.75rem;
-      min-height: 140px;
+      padding: 0.5rem 0.85rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      background: var(--accent);
+      color: #fff;
+      margin-right: 0.5rem;
+      margin-bottom: 0.35rem;
     }
-    .message-meta { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.5rem; }
+    button.secondary { background: var(--border); color: var(--text); }
+    button.danger { background: #5c2323; color: #fecaca; }
+    button.danger:hover { background: #7a2e2e; }
+    button.row-del {
+      padding: 0.2rem 0.5rem;
+      font-size: 0.72rem;
+      margin: 0;
+      background: transparent;
+      color: var(--err);
+      border: 1px solid rgba(248, 113, 113, 0.45);
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .status-legend {
+      margin: 0 0 0.75rem;
+      padding: 0.65rem 0.85rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.12);
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .status-legend dt {
+      font-weight: 600;
+      color: var(--text);
+      margin-top: 0.35rem;
+    }
+    .status-legend dt:first-child { margin-top: 0; }
+    .status-legend dd { margin: 0.1rem 0 0 0; }
+    .detail-actions { margin-top: 0.75rem; }
+    .empty { color: var(--muted); font-size: 0.85rem; }
     .toast {
       position: fixed;
       bottom: 1rem;
@@ -143,98 +233,166 @@
       border: 1px solid var(--border);
       font-size: 0.85rem;
       z-index: 100;
-      max-width: 360px;
+      max-width: 420px;
     }
     .toast.err { border-color: var(--err); }
-    .empty { color: var(--muted); font-size: 0.85rem; }
-    .auto label { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
+    label { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
+    code { font-size: 0.78rem; color: var(--accent); }
+    .toolbar { margin-top: 0.75rem; }
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .filter-bar label { margin: 0; color: var(--text); }
+    .filter-bar input[type="search"] {
+      flex: 1;
+      min-width: 12rem;
+      max-width: 22rem;
+      padding: 0.45rem 0.65rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.2);
+      color: var(--text);
+      font-size: 0.875rem;
+    }
+    .filter-bar input[type="search"]::placeholder { color: var(--muted); }
+    .filter-count { font-size: 0.8rem; color: var(--muted); }
+
+    tbody tr.appt-row { cursor: pointer; }
+    tbody tr.appt-row:hover td { background: rgba(61, 139, 253, 0.08); }
+    tbody tr.appt-row.selected td { background: rgba(61, 139, 253, 0.15); }
+
+    .detail-panel {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    .detail-panel[hidden] { display: none; }
+    .detail-body-preview {
+      margin-top: 0.75rem;
+      padding: 0.65rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.2);
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+      font-family: inherit;
+      color: var(--text);
+    }
   </style>
 </head>
 <body>
   <header>
-    <h1>Scheduling &amp; messaging — testconsole</h1>
-    <p>Alleen voor ontwikkeling. Test <strong>24u-</strong> en <strong>1u-herinneringen</strong> (US-001/002): boek op nu + lead + 5 min, sync → FHIR → poll, scheduler en berichtpreview.</p>
+    <h1>Scheduling — logmonitor</h1>
+    <p>
+      Maak afspraken in de externe distro:
+      <a href="http://localhost/openmrs/spa/home/appointments" target="_blank" rel="noopener">
+        http://localhost/openmrs/spa/home/appointments
+      </a>.
+      Deze pagina toont FHIR-poll, polled data en berichtverwerking.
+    </p>
   </header>
+
   <main>
-    <div class="grid grid-2" style="margin-bottom: 1rem;">
-      <section class="card">
-        <h2>Scheduler-configuratie</h2>
-        <label for="reminder-mode">Herinnering testen</label>
-        <select id="reminder-mode">
-          <option value="24h">24 uur (US-001)</option>
-          <option value="1h" selected>1 uur (US-002)</option>
-        </select>
-        <dl class="status-grid" id="status-grid"></dl>
-        <div class="window-bar" title="Herinneringsvenster (UTC)"><div class="window-fill" id="window-fill" style="width:0%"></div></div>
-        <p class="empty" id="window-desc"></p>
-        <p class="empty" id="window-desc-alt" hidden></p>
-        <label for="provider-select">Messaging provider (queue)</label>
-        <select id="provider-select"><option value="">— laden… —</option></select>
-        <p class="empty" style="margin-top: 0.35rem;">Provider wordt per afspraak opgeslagen (bij boeken of bij wijziging hier). <em>Scheduler nu</em> = alle in venster; <em>Verstuur geselecteerde</em> = één rij. Achtergrond-scheduler = altijd default.</p>
-        <div class="btn-row">
-          <button type="button" class="btn-secondary" id="btn-refresh">Vernieuwen</button>
-          <button type="button" class="btn-secondary" id="btn-poll">Poll nu</button>
-          <button type="button" class="btn-secondary" id="btn-scheduler">Scheduler nu (modus)</button>
-          <button type="button" class="btn-secondary" id="btn-scheduler-all">Scheduler 24u+1u</button>
-          <button type="button" class="btn-secondary" id="btn-scheduler-one" disabled>Verstuur geselecteerde</button>
-        </div>
-        <div class="auto" style="margin-top: 0.75rem;">
-          <label><input type="checkbox" id="auto-refresh" checked> Auto-refresh (15s)</label>
-        </div>
-      </section>
-      <section class="card">
-        <h2>Testafspraak aanmaken (OpenMRS)</h2>
-        <label for="patient-select">Patiënt uit OpenMRS</label>
-        <select id="patient-select"><option value="">— laden… —</option></select>
-        <label for="location-select">Locatie uit OpenMRS</label>
-        <select id="location-select"><option value="">— laden… —</option></select>
-        <label for="reason">Reden / instructies (OpenMRS <code>reason</code>)</label>
-        <textarea id="reason" rows="2" placeholder="Bijv. Nuchter blijven, medicijnen meenemen">Testafspraak via comm-module GUI</textarea>
-        <label><input type="checkbox" id="run-sync" checked> Direct daarna OpenMRS→FHIR sync</label>
-        <label><input type="checkbox" id="run-poll" checked> Direct daarna FHIR-pollen</label>
-        <div class="btn-row">
-          <button type="button" class="btn-primary" id="btn-create">Afspraak in gekozen venster</button>
-          <button type="button" class="btn-secondary" id="btn-create-1h">Afspraak in 1u-venster</button>
-        </div>
-        <p class="empty" id="create-result"></p>
-      </section>
-    </div>
+    <section class="card" id="summary-card">
+      <h2>Samenvatting</h2>
+      <div class="summary" id="summary-block"></div>
+      <div class="alert" id="status-alert" hidden></div>
+      <div class="toolbar">
+        <button type="button" id="btn-refresh">Vernieuwen</button>
+        <button type="button" class="secondary" id="btn-poll">FHIR poll nu</button>
+        <button type="button" class="secondary" id="btn-scheduler">Scheduler nu</button>
+        <label style="margin-left: 0.5rem;">
+          <input type="checkbox" id="auto-refresh" checked> Auto-refresh (10s)
+        </label>
+      </div>
+    </section>
 
-    <div class="grid grid-3">
-      <section class="card">
-        <h2>Polled appointments</h2>
-        <div style="overflow-x: auto;">
-          <table>
-            <thead>
-              <tr>
-                <th>FHIR id</th>
-                <th>Afspraak (UTC)</th>
-                <th>Provider</th>
-                <th>24u</th>
-                <th>1u</th>
-                <th>24u verz.</th>
-                <th>1u verz.</th>
-              </tr>
-            </thead>
-            <tbody id="appointments-body"></tbody>
-          </table>
-        </div>
-        <p class="empty" id="appointments-empty">Geen rijen — maak een testafspraak of wacht op poll.</p>
-      </section>
-      <section class="card">
-        <h2 id="message-title">Bericht (1u-herinnering)</h2>
-        <div class="message-meta" id="message-meta">Selecteer een afspraak in de tabel.</div>
-        <div class="message-box" id="message-body">—</div>
-        <div class="btn-row">
-          <button type="button" class="btn-danger" id="btn-cancel" disabled>Annuleer in OpenMRS</button>
-          <button type="button" class="btn-danger" id="btn-delete-polled" disabled>Verwijder polled rij</button>
-          <button type="button" class="btn-danger" id="btn-clear-logs" disabled>Logs wissen</button>
-        </div>
-      </section>
-    </div>
+    <section class="card">
+      <h2>Laatste FHIR-poll</h2>
+      <p class="empty" id="poll-empty">Nog geen poll — klik <strong>FHIR poll nu</strong> of wacht op de achtergrond-poll.</p>
+      <div id="poll-content" hidden>
+        <div class="funnel" id="poll-funnel"></div>
+        <div class="funnel-skips" id="poll-skips"></div>
+        <dl class="kv-rows" id="poll-meta"></dl>
+      </div>
+    </section>
 
-    <section class="card" style="margin-top: 1rem;">
-      <h2>Delivery log</h2>
+    <section class="card">
+      <h2>Configuratie &amp; herinneringen</h2>
+      <div class="cols-2">
+        <div>
+          <h3>Verbinding &amp; poll</h3>
+          <dl class="kv-rows" id="cfg-connection"></dl>
+          <h3>Scheduler</h3>
+          <dl class="kv-rows" id="cfg-scheduler"></dl>
+        </div>
+        <div>
+          <h3>Herinnering 24 uur</h3>
+          <dl class="kv-rows" id="cfg-rem24"></dl>
+          <h3>Herinnering 1 uur</h3>
+          <dl class="kv-rows" id="cfg-rem1"></dl>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="appointments-card">
+      <h2>Polled appointments (database)</h2>
+      <p class="empty" style="margin: 0 0 0.75rem;">Klik een rij voor datum, locatie en instructies (notificatie-inhoud).</p>
+      <div class="filter-bar">
+        <label for="filter-patient-name">Filter op naam</label>
+        <input type="search" id="filter-patient-name" placeholder="bijv. Kloosterman" autocomplete="off">
+        <span class="filter-count" id="filter-patient-count"></span>
+      </div>
+      <dl class="status-legend">
+        <dt>24u / 1u status — in venster</dt>
+        <dd>Nu is het moment om deze herinnering te sturen (afspraakstart minus 24u of 1u, ± venster). De scheduler mag een SMS in de queue zetten.</dd>
+        <dt>te vroeg</dt>
+        <dd>De herinnering is nog niet aan de beurt (bij 1u: afspraak over ~24u → 1u-SMS pas over ~23 uur).</dd>
+        <dt>te laat</dt>
+        <dd>Het verzendvenster voor deze herinnering is voorbij (nog niet verstuurd).</dd>
+        <dt>verstuurd</dt>
+        <dd>Deze herinnering staat al in de delivery-log (queue of succesvol naar provider).</dd>
+        <dt>verleden / geannuleerd / geen tel.</dt>
+        <dd>Afspraak is voorbij, voided, of er ontbreekt een telefoonnummer.</dd>
+      </dl>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>FHIR id</th>
+              <th id="appt-start-col">Start</th>
+              <th>Patiënt</th>
+              <th>Tel.</th>
+              <th>24u status</th>
+              <th>1u status</th>
+              <th>Voided</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="appointments-body"></tbody>
+        </table>
+      </div>
+      <p class="empty" id="appointments-empty">Geen rijen in polled_appointment.</p>
+
+      <div class="detail-panel" id="appointment-detail" hidden>
+        <h3>Afspraakdetail</h3>
+        <dl class="kv-rows" id="detail-fields"></dl>
+        <h3>Voorbeeldbericht 24 uur</h3>
+        <pre class="detail-body-preview" id="detail-preview-24">—</pre>
+        <h3>Voorbeeldbericht 1 uur</h3>
+        <pre class="detail-body-preview" id="detail-preview-1">—</pre>
+        <div class="detail-actions">
+          <button type="button" class="danger" id="btn-delete-polled" hidden>Verwijder uit polled_appointment</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Delivery log (berichten verwerkt)</h2>
       <div style="overflow-x: auto;">
         <table>
           <thead>
@@ -244,6 +402,7 @@
               <th>Status</th>
               <th>Provider</th>
               <th>OK</th>
+              <th>Fout</th>
             </tr>
           </thead>
           <tbody id="logs-body"></tbody>
@@ -256,58 +415,18 @@
 
   <script>
     const API = '/api/test/scheduling';
-    let selectedId = null;
-    let selectedCancellable = false;
     let refreshTimer = null;
-    let defaultProvider = 'SWIFTSEND';
-    let lastStatus = null;
-    let lastAppointments = [];
+    let selectedAppointmentFhirId = null;
+    let displayZoneId = 'Europe/Amsterdam';
+    let cachedAppointments = [];
 
-    function getReminderMode() {
-      return document.getElementById('reminder-mode').value;
-    }
-
-    function apiQuery(reminderOverride) {
-      const parts = [];
-      const p = getSelectedProvider();
-      if (p) parts.push('provider=' + encodeURIComponent(p));
-      const rem = reminderOverride != null ? reminderOverride : getReminderMode();
-      if (rem) parts.push('reminder=' + encodeURIComponent(rem));
-      return parts.length ? '?' + parts.join('&') : '';
-    }
-
-    function getSelectedProvider() {
-      return document.getElementById('provider-select').value || defaultProvider;
-    }
-
-    function providerQuery() {
-      const p = getSelectedProvider();
-      return p ? '?provider=' + encodeURIComponent(p) : '';
-    }
-
-    function populateProviderSelect(status) {
-      const sel = document.getElementById('provider-select');
-      const previous = sel.value;
-      defaultProvider = status.defaultProvider || 'SWIFTSEND';
-      const providers = status.availableProviders || [defaultProvider];
-      sel.innerHTML = providers.map(p => {
-        const label = p === defaultProvider ? p + ' (default)' : p;
-        return `<option value="${p}">${escapeHtml(label)}</option>`;
-      }).join('');
-      if (previous && providers.includes(previous)) {
-        sel.value = previous;
-      } else {
-        sel.value = defaultProvider;
-      }
-    }
-
-    const STATUS_LABELS = {
-      IN_REMINDER_WINDOW: { text: 'In venster', cls: 'badge-in' },
-      TOO_EARLY: { text: 'Te vroeg', cls: 'badge-early' },
-      TOO_LATE: { text: 'Te laat', cls: 'badge-late' },
-      APPOINTMENT_PAST: { text: 'Verstreken', cls: 'badge-past' },
-      VOIDED: { text: 'Geannuleerd', cls: 'badge-void' },
-      MISSING_PHONE: { text: 'Geen tel.', cls: 'badge-phone' }
+    const WINDOW_LABELS = {
+      IN_REMINDER_WINDOW: 'in venster',
+      TOO_EARLY: 'te vroeg',
+      TOO_LATE: 'te laat',
+      APPOINTMENT_PAST: 'verleden',
+      VOIDED: 'geannuleerd',
+      MISSING_PHONE: 'geen tel.'
     };
 
     function showToast(msg, isErr) {
@@ -316,27 +435,57 @@
       t.className = 'toast' + (isErr ? ' err' : '');
       t.hidden = false;
       clearTimeout(t._tm);
-      t._tm = setTimeout(() => { t.hidden = true; }, 4000);
+      t._tm = setTimeout(() => { t.hidden = true; }, 6000);
     }
 
     function fmtInstant(iso) {
       if (!iso) return '—';
-      const d = new Date(iso);
-      return d.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' Z');
+      return new Date(iso).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' Z');
+    }
+
+    /** Afspraak- en venstertijden in scheduler-zone (zelfde als notificaties). */
+    function fmtInstantLocal(iso) {
+      if (!iso) return '—';
+      try {
+        return new Intl.DateTimeFormat('nl-NL', {
+          timeZone: displayZoneId,
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }).format(new Date(iso));
+      } catch (e) {
+        return fmtInstant(iso);
+      }
+    }
+
+    function fmtRange(from, to, useLocal) {
+      if (!from && !to) return '—';
+      const fmt = useLocal ? fmtInstantLocal : fmtInstant;
+      return fmt(from) + ' t/m ' + fmt(to);
+    }
+
+    function esc(s) {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function kvRows(containerId, items) {
+      document.getElementById(containerId).innerHTML = items
+        .map(([k, v, cls]) => `<div class="kv-row"><dt>${k}</dt><dd class="${cls || ''}">${v}</dd></div>`)
+        .join('');
     }
 
     async function api(path, opts) {
       const res = await fetch(API + path, opts);
       if (!res.ok) {
         const text = await res.text();
-        try {
-          const j = JSON.parse(text);
-          const detail = j.detail || j.message || text;
-          throw new Error(res.status + ': ' + detail);
-        } catch (parseErr) {
-          if (parseErr instanceof Error && parseErr.message.startsWith(String(res.status))) throw parseErr;
-          throw new Error(res.status + ': ' + text);
-        }
+        throw new Error(res.status + ': ' + text);
       }
       if (res.status === 204) return null;
       const ct = res.headers.get('content-type') || '';
@@ -344,177 +493,335 @@
       return res.text();
     }
 
-    function renderStatus(s) {
-      lastStatus = s;
-      const mode = getReminderMode();
-      const w = mode === '1h' ? s.oneHourReminderWindow : s.reminderWindow;
-      const inWindowCount = mode === '1h' ? s.appointmentsCurrentlyIn1hWindow : s.appointmentsCurrentlyInWindow;
-      const items = [
-        ['Servertijd (UTC)', fmtInstant(s.serverTime)],
-        ['Organisatie', s.organisationId],
-        ['Lead 24u (uren)', s.reminderLeadHours],
-        ['Lead 1u (uren)', s.reminder1LeadHours],
-        ['Venster (min)', s.reminderWindowMinutes],
-        ['In venster (' + mode + ')', inWindowCount],
-        ['In venster 24u', s.appointmentsCurrentlyInWindow],
-        ['In venster 1u', s.appointmentsCurrentlyIn1hWindow],
-        ['Scheduler', s.schedulerEnabled ? 'aan' : 'uit'],
-        ['Check-interval', s.schedulerCheckIntervalMinutes + ' min'],
-        ['FHIR-poll', s.fhirPollIntervalMinutes + ' min'],
-        ['Zone weergave', s.reminderZoneId],
-        ['Provider', s.defaultProvider]
-      ];
-      document.getElementById('status-grid').innerHTML = items
-        .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
-      const desc = (win, label) =>
-        `${label} UTC: ${fmtInstant(win.windowStart)} t/m ${fmtInstant(win.windowEnd)} ` +
-        `(doel: ${fmtInstant(win.target)}, lead ${win.leadHours}u, breedte ${win.windowMinutes} min)`;
-      document.getElementById('window-desc').textContent = desc(w, 'Actief venster');
-      document.getElementById('window-desc-alt').hidden = false;
-      document.getElementById('window-desc-alt').textContent =
-        '24u: ' + desc(s.reminderWindow, '') + ' | 1u: ' + desc(s.oneHourReminderWindow, '');
-      const now = new Date(s.serverTime).getTime();
-      const start = new Date(w.windowStart).getTime();
-      const end = new Date(w.windowEnd).getTime();
-      const span = end - start;
-      const pct = span > 0 ? Math.min(100, Math.max(0, ((now - start) / span) * 100)) : 0;
-      document.getElementById('window-fill').style.width = pct + '%';
-      document.getElementById('message-title').textContent =
-        mode === '1h' ? 'Bericht (1u-herinnering)' : 'Bericht (24u-herinnering)';
+    function renderWindow(w) {
+      if (!w) return '—';
+      return fmtRange(w.windowStart, w.windowEnd, true)
+        + ' · doel ' + w.leadHours + 'u (±' + Math.floor(w.windowMinutes / 2) + ' min)';
     }
 
-    function badgeFor(status, sent) {
-      const s = STATUS_LABELS[status] || { text: status, cls: 'badge-late' };
-      let html = `<span class="badge ${s.cls}">${s.text}</span>`;
-      if (sent) html += ' <span class="badge badge-sent">Verstuurd</span>';
-      return html;
-    }
-
-    function formatProviderCell(r) {
-      const planned = r.testMessagingProvider || '—';
-      const sent = r.lastDeliveryProvider;
-      if (sent && sent !== planned) {
-        return `${escapeHtml(planned)} <span class="empty">(log: ${escapeHtml(sent)})</span>`;
+    function buildHint(s, poll, dbCount) {
+      if (!s.fhirServerUrl) {
+        return { level: 'err', text: 'Geen poll-bron — zet OPENMRS_FHIR_SERVER_URL en/of OPENMRS_DATASOURCE_URL (JDBC-fallback).' };
       }
-      return escapeHtml(planned);
+      if (s.fhirServerUrl.startsWith('jdbc:')) {
+        return { level: 'ok', text: 'JDBC-poll actief (patient_appointment). Boek afspraken in de SPA, start in de toekomst, patiënt met telefoon.' };
+      }
+      if (!poll) {
+        return { level: 'warn', text: 'Nog geen poll uitgevoerd. Klik FHIR poll nu of wacht op interval.' };
+      }
+      if (!poll.success) {
+        return { level: 'err', text: 'Laatste poll mislukt: ' + (poll.errorMessage || 'onbekend') };
+      }
+      if (poll.fhirRawCount === 0) {
+        return {
+          level: 'warn',
+          text: 'FHIR gaf 0 appointments. Controleer of de distro FHIR2 data heeft (curl) of boek een afspraak in de SPA.'
+        };
+      }
+      if (poll.savedCount === 0 && poll.mappedCount > 0) {
+        return {
+          level: 'warn',
+          text: 'Wel ' + poll.mappedCount + ' gemapt maar 0 opgeslagen — vaak start in verleden of op exclusion-lijst.'
+        };
+      }
+      if (dbCount === 0 && poll.savedCount > 0) {
+        return { level: 'warn', text: 'Poll meldde opslag maar database is leeg — vernieuw of controleer transactie.' };
+      }
+      return {
+        level: 'ok',
+        text: 'Tip: afspraak in FHIR2, start in de toekomst (UTC), patiënt met telefoon voor SMS.'
+      };
+    }
+
+    function renderSummary(s, poll, dbCount) {
+      const hint = buildHint(s, poll, dbCount);
+      let badgeClass = 'ok';
+      let badgeText = 'Klaar';
+
+      if (!s.fhirServerUrl) {
+        badgeClass = 'err';
+        badgeText = 'Geen FHIR-URL';
+      } else if (!poll) {
+        badgeClass = 'warn';
+        badgeText = 'Geen poll';
+      } else if (!poll.success) {
+        badgeClass = 'err';
+        badgeText = 'Poll mislukt';
+      } else if (poll.fhirRawCount === 0) {
+        badgeClass = 'warn';
+        badgeText = '0 van FHIR';
+      } else if (poll.savedCount === 0) {
+        badgeClass = 'warn';
+        badgeText = 'Niet opgeslagen';
+      }
+
+      const pollLine = poll
+        ? (poll.success
+            ? poll.fhirRawCount + ' van FHIR · ' + poll.savedCount + ' opgeslagen · poll ' + fmtInstant(poll.polledAt)
+            : 'Poll mislukt · ' + fmtInstant(poll.polledAt))
+        : 'Geen poll-data';
+
+      document.getElementById('summary-block').innerHTML =
+        '<span class="summary-badge ' + badgeClass + '">' + esc(badgeText) + '</span>' +
+        '<div class="summary-text">' +
+          '<p class="line1">' + dbCount + ' afspraken in database · ' + esc(s.organisationId) + '</p>' +
+          '<p class="line2">' + esc(pollLine) + '</p>' +
+        '</div>';
+
+      const alert = document.getElementById('status-alert');
+      alert.hidden = false;
+      alert.className = 'alert' + (hint.level === 'warn' ? ' warn' : hint.level === 'err' ? ' err' : '');
+      alert.textContent = hint.text;
+    }
+
+    function renderConfig(s, dbCount) {
+      kvRows('cfg-connection', [
+        ['Servertijd (UTC)', fmtInstant(s.serverTime)],
+        ['Organisatie', esc(s.organisationId)],
+        ['FHIR-server', '<span class="mono">' + esc(s.fhirServerUrl || '—') + '</span>', 'mono'],
+        ['JDBC sync (legacy)', s.fhirSyncEnabled ? 'aan' : 'uit'],
+        ['Poll lookback', s.appointmentPollSinceDays + ' dagen'],
+        ['Zoekvenster poll', fmtRange(s.pollWindowFrom, s.pollWindowTo, true)],
+        ['DB-tijdzone (JDBC)', esc(s.appointmentDbZoneId || '—')],
+        ['Weergave afspraken', esc(s.appointmentDisplayZoneId || displayZoneId)],
+        ['Tijdzone herinneringen', esc(s.reminderZoneId || displayZoneId)],
+        ['FHIR-poll interval', s.fhirPollIntervalMinutes + ' min'],
+        ['Polled totaal (DB)', String(dbCount)]
+      ]);
+      kvRows('cfg-scheduler', [
+        ['Scheduler', s.schedulerEnabled ? 'aan' : 'uit', s.schedulerEnabled ? 'ok' : ''],
+        ['Check-interval', s.schedulerCheckIntervalMinutes + ' min']
+      ]);
+      kvRows('cfg-rem24', [
+        ['Venster', renderWindow(s.reminderWindow)],
+        ['Nu in venster', String(s.appointmentsCurrentlyInWindow), s.appointmentsCurrentlyInWindow > 0 ? 'ok' : '']
+      ]);
+      kvRows('cfg-rem1', [
+        ['Venster', renderWindow(s.oneHourReminderWindow)],
+        ['Nu in venster', String(s.appointmentsCurrentlyIn1hWindow), s.appointmentsCurrentlyIn1hWindow > 0 ? 'ok' : '']
+      ]);
+    }
+
+    function renderPollDiagnostics(poll) {
+      const empty = document.getElementById('poll-empty');
+      const content = document.getElementById('poll-content');
+      if (!poll) {
+        empty.hidden = false;
+        content.hidden = true;
+        return;
+      }
+      empty.hidden = true;
+      content.hidden = false;
+
+      const steps = [
+        { num: poll.fhirRawCount, lbl: 'FHIR ruw' },
+        { num: poll.mappedCount, lbl: 'Gemapt' },
+        { num: poll.savedCount, lbl: 'Opgeslagen' }
+      ];
+      document.getElementById('poll-funnel').innerHTML = steps.map((s, i) => {
+        const arrow = i < steps.length - 1 ? '<span class="funnel-arrow">→</span>' : '';
+        const highlight = (i === 2 && poll.savedCount > 0) ? 'ok' : (i === 0 && poll.fhirRawCount === 0 ? 'warn' : '');
+        const style = highlight === 'ok' ? ' style="border-color:var(--ok)"' : highlight === 'warn' ? ' style="border-color:var(--warn)"' : '';
+        return (i > 0 ? arrow : '') +
+          '<div class="funnel-step"' + style + '><span class="num">' + s.num + '</span><span class="lbl">' + s.lbl + '</span></div>';
+      }).join('');
+
+      document.getElementById('poll-skips').innerHTML =
+        '<span>Niet gemapt: <strong>' + poll.skippedUnmapped + '</strong></span>' +
+        '<span>Verleden: <strong>' + poll.skippedPast + '</strong></span>' +
+        '<span>Uitgesloten: <strong>' + poll.skippedExcluded + '</strong></span>';
+
+      const statusCls = poll.success ? 'ok' : 'err';
+      kvRows('poll-meta', [
+        ['Poll tijd', fmtInstant(poll.polledAt)],
+        ['Status', poll.success ? 'OK' : 'fout', statusCls],
+        ['FHIR-server', '<span class="mono">' + esc(poll.fhirServerUrl || '—') + '</span>', 'mono'],
+        ['Server info', esc(poll.fhirServerInfo || '—')],
+        ['Zoekvenster', fmtRange(poll.windowFrom, poll.windowTo, true)],
+        ['Foutmelding', esc(poll.errorMessage || '—'), poll.errorMessage ? 'err' : '']
+      ]);
+    }
+
+    function displayWindowLabel(status, alreadySent) {
+      if (alreadySent) return 'verstuurd';
+      return WINDOW_LABELS[status] || status;
+    }
+
+    function rowClassForWindow(status, alreadySent) {
+      if (alreadySent) return 'sent';
+      if (status === 'IN_REMINDER_WINDOW') return 'ok';
+      if (status === 'MISSING_PHONE' || status === 'TOO_EARLY' || status === 'TOO_LATE') return 'warn';
+      return '';
+    }
+
+    function rowClassForAppointment(r) {
+      if ((!r.alreadySentSuccessfully && r.windowStatus === 'IN_REMINDER_WINDOW')
+          || (!r.alreadySentOneHourSuccessfully && r.oneHourWindowStatus === 'IN_REMINDER_WINDOW')) {
+        return 'ok';
+      }
+      if (r.alreadySentSuccessfully || r.alreadySentOneHourSuccessfully) return 'sent';
+      if (rowClassForWindow(r.windowStatus, false) === 'warn'
+          || rowClassForWindow(r.oneHourWindowStatus, false) === 'warn') {
+        return 'warn';
+      }
+      return '';
+    }
+
+    function renderAppointmentDetail(d) {
+      const panel = document.getElementById('appointment-detail');
+      const delBtn = document.getElementById('btn-delete-polled');
+      if (!d) {
+        panel.hidden = true;
+        delBtn.hidden = true;
+        return;
+      }
+      panel.hidden = false;
+      kvRows('detail-fields', [
+        ['FHIR id', '<code>' + esc(d.appointmentFhirId) + '</code>', 'mono'],
+        ['OpenMRS id', d.openmrsAppointmentId != null ? String(d.openmrsAppointmentId) : '—'],
+        ['Patiënt', esc(d.patientDisplayName || '—')],
+        ['Telefoon', esc(d.patientPhoneMasked || '—')],
+        ['Datum', esc(d.appointmentDateLabel || '—')],
+        ['Tijd', esc(d.appointmentTimeLabel || '—')],
+        ['Locatie', esc(d.location || '—')],
+        ['Soort afspraak', esc(d.appointmentType || '—')],
+        ['Instructies', esc(d.instructions || '— (geen specifieke instructies)')],
+        ['Voided', d.voided ? 'ja' : 'nee', d.voided ? 'warn' : '']
+      ]);
+      document.getElementById('detail-preview-24').textContent =
+        d.messagePreview24h && d.messagePreview24h.body ? d.messagePreview24h.body : '—';
+      document.getElementById('detail-preview-1').textContent =
+        d.messagePreview1h && d.messagePreview1h.body ? d.messagePreview1h.body : '—';
+    }
+
+    async function deletePolledAppointment(fhirId) {
+      if (!fhirId) return;
+      const name = cachedAppointments.find(a => a.appointmentFhirId === fhirId);
+      const label = name && name.patientDisplayName ? name.patientDisplayName : fhirId;
+      if (!confirm('Verwijder "' + label + '" uit polled_appointment?\n\nDe volgende poll slaat deze afspraak over (exclusion). OpenMRS-afspraak blijft bestaan.')) {
+        return;
+      }
+      try {
+        const r = await api(
+          '/polled-appointments/' + encodeURIComponent(fhirId) + '?clearDeliveryLogs=true',
+          { method: 'DELETE' }
+        );
+        showToast(r.message || 'Verwijderd', false);
+        if (selectedAppointmentFhirId === fhirId) {
+          selectedAppointmentFhirId = null;
+          document.getElementById('appointment-detail').hidden = true;
+          document.getElementById('btn-delete-polled').hidden = true;
+        }
+        cachedAppointments = cachedAppointments.filter(a => a.appointmentFhirId !== fhirId);
+        applyAppointmentFilter();
+        const logs = await api('/delivery-logs');
+        renderLogs(logs);
+        const status = await api('/status');
+        const poll = status.lastPoll;
+        renderSummary(status, poll, cachedAppointments.length);
+      } catch (e) {
+        showToast('Verwijderen mislukt: ' + e.message, true);
+      }
+    }
+
+    async function selectAppointment(fhirId) {
+      selectedAppointmentFhirId = fhirId;
+      const delBtn = document.getElementById('btn-delete-polled');
+      delBtn.hidden = false;
+      delBtn.dataset.fhirId = fhirId;
+      document.querySelectorAll('#appointments-body tr.appt-row').forEach(tr => {
+        tr.classList.toggle('selected', tr.dataset.fhirId === fhirId);
+      });
+      try {
+        const detail = await api('/appointments/' + encodeURIComponent(fhirId));
+        renderAppointmentDetail(detail);
+      } catch (e) {
+        showToast('Detail laden mislukt: ' + e.message, true);
+      }
+    }
+
+    function patientNameForFilter(row) {
+      return (row.patientDisplayName || row.patientFhirId || '').trim().toLowerCase();
+    }
+
+    function filterAppointmentsByName(rows) {
+      const q = (document.getElementById('filter-patient-name').value || '').trim().toLowerCase();
+      if (!q) return rows;
+      return rows.filter(r => patientNameForFilter(r).includes(q));
+    }
+
+    function updateFilterCount(shown, total) {
+      const el = document.getElementById('filter-patient-count');
+      const q = (document.getElementById('filter-patient-name').value || '').trim();
+      if (!total) {
+        el.textContent = '';
+        return;
+      }
+      if (!q) {
+        el.textContent = total + ' afspraken';
+        return;
+      }
+      el.textContent = shown + ' van ' + total + ' (filter: "' + q + '")';
+    }
+
+    function applyAppointmentFilter() {
+      renderAppointments(filterAppointmentsByName(cachedAppointments));
     }
 
     function renderAppointments(rows) {
       const body = document.getElementById('appointments-body');
       const empty = document.getElementById('appointments-empty');
+      const total = cachedAppointments.length;
+      updateFilterCount(rows.length, total);
       if (!rows.length) {
         body.innerHTML = '';
         empty.hidden = false;
+        empty.textContent = total
+          ? 'Geen afspraken voor dit naamfilter.'
+          : 'Geen rijen in polled_appointment.';
+        if (!total || !selectedAppointmentFhirId || !rows.some(r => r.appointmentFhirId === selectedAppointmentFhirId)) {
+          document.getElementById('appointment-detail').hidden = true;
+        }
+        if (!total) {
+          selectedAppointmentFhirId = null;
+        }
         return;
       }
       empty.hidden = true;
+      const stillThere = selectedAppointmentFhirId
+        && rows.some(r => r.appointmentFhirId === selectedAppointmentFhirId);
+      if (!stillThere) {
+        selectedAppointmentFhirId = null;
+        document.getElementById('appointment-detail').hidden = true;
+        document.getElementById('btn-delete-polled').hidden = true;
+      }
       body.innerHTML = rows.map(r => {
-        const sel = r.appointmentFhirId === selectedId ? ' class="selected"' : '';
-        return `<tr data-id="${r.appointmentFhirId}"${sel}>
-          <td><code>${r.appointmentFhirId}</code></td>
-          <td>${fmtInstant(r.appointmentDatetime)}</td>
-          <td>${formatProviderCell(r)}</td>
-          <td>${badgeFor(r.windowStatus, r.alreadySentSuccessfully)}</td>
-          <td>${badgeFor(r.oneHourWindowStatus, r.alreadySentOneHourSuccessfully)}</td>
-          <td>${r.alreadySentSuccessfully ? 'ja' : 'nee'}</td>
-          <td>${r.alreadySentOneHourSuccessfully ? 'ja' : 'nee'}</td>
+        const cls = rowClassForAppointment(r);
+        const w24 = displayWindowLabel(r.windowStatus, r.alreadySentSuccessfully);
+        const w1 = displayWindowLabel(r.oneHourWindowStatus, r.alreadySentOneHourSuccessfully);
+        const selected = r.appointmentFhirId === selectedAppointmentFhirId ? ' selected' : '';
+        return `<tr class="appt-row ${cls}${selected}" data-fhir-id="${esc(r.appointmentFhirId)}">
+          <td><code>${esc(r.appointmentFhirId)}</code></td>
+          <td>${fmtInstantLocal(r.appointmentDatetime)}</td>
+          <td>${esc(r.patientDisplayName || r.patientFhirId || '—')}</td>
+          <td>${esc(r.patientPhoneMasked || '—')}</td>
+          <td>${esc(w24)}</td>
+          <td>${esc(w1)}</td>
+          <td>${r.voided ? 'ja' : 'nee'}</td>
+          <td><button type="button" class="row-del" data-del-fhir="${esc(r.appointmentFhirId)}">verwijder</button></td>
         </tr>`;
       }).join('');
-      body.querySelectorAll('tr').forEach(tr => {
-        tr.addEventListener('click', () => selectAppointment(tr.dataset.id, rows));
+      body.querySelectorAll('tr.appt-row').forEach(tr => {
+        tr.addEventListener('click', () => selectAppointment(tr.dataset.fhirId));
       });
-    }
-
-    function renderMessage(row, preview) {
-      const meta = document.getElementById('message-meta');
-      const box = document.getElementById('message-body');
-      let html = '';
-      if (row?.appointmentReason) {
-        html = `OpenMRS reden: <strong>${escapeHtml(row.appointmentReason)}</strong><br>`;
-      }
-      if (!preview) {
-        meta.innerHTML = html + 'Geen bericht (ontbrekend telefoon).';
-        box.textContent = '—';
-        return;
-      }
-      meta.innerHTML = html +
-        `<strong>${escapeHtml(preview.subject)}</strong><br>` +
-        `Naar: ${escapeHtml(preview.recipient)} · Provider: ${preview.provider} · Type: ${preview.messageType}`;
-      box.textContent = preview.body;
-    }
-
-    function escapeHtml(s) {
-      if (!s) return '';
-      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-
-    async function saveProviderForSelected() {
-      if (!selectedId) return;
-      const provider = getSelectedProvider();
-      const updated = await api(
-        '/appointments/' + encodeURIComponent(selectedId) + '/test-provider?provider=' + encodeURIComponent(provider),
-        { method: 'PUT' }
-      );
-      return updated;
-    }
-
-    function selectAppointment(id, rows) {
-      selectedId = id;
-      const row = rows.find(r => r.appointmentFhirId === id);
-      selectedCancellable = row && !row.voided;
-      document.getElementById('btn-clear-logs').disabled = !id;
-      document.getElementById('btn-delete-polled').disabled = !id;
-      document.getElementById('btn-cancel').disabled = !selectedCancellable;
-      document.getElementById('btn-scheduler-one').disabled = !id;
-      const sel = document.getElementById('provider-select');
-      if (row?.testMessagingProvider) {
-        sel.value = row.testMessagingProvider;
-      }
-      lastAppointments = rows;
-      renderAppointments(rows);
-      renderMessageForMode(row);
-    }
-
-    function renderMessageForMode(row) {
-      const mode = getReminderMode();
-      const preview = mode === '1h' ? row?.oneHourMessagePreview : row?.messagePreview;
-      renderMessage(row, preview);
-    }
-
-    async function loadPatients() {
-      const sel = document.getElementById('patient-select');
-      try {
-        const patients = await api('/patients');
-        if (!patients.length) {
-          sel.innerHTML = '<option value="">Geen patiënten in OpenMRS</option>';
-          return;
-        }
-        sel.innerHTML = '<option value="">— kies patiënt —</option>' +
-          patients.map(p => {
-            const tel = p.hasPhone ? p.phoneMasked : 'geen tel.';
-            return `<option value="${p.patientUuid}">${escapeHtml(p.displayName)} (${tel})</option>`;
-          }).join('');
-      } catch (e) {
-        sel.innerHTML = '<option value="">Laden mislukt</option>';
-        showToast('Patiënten: ' + e.message, true);
-      }
-    }
-
-    async function loadLocations() {
-      const sel = document.getElementById('location-select');
-      try {
-        const locations = await api('/locations');
-        if (!locations.length) {
-          sel.innerHTML = '<option value="">Geen locaties in OpenMRS</option>';
-          return;
-        }
-        sel.innerHTML = '<option value="">— kies locatie —</option>' +
-          locations.map(l =>
-            `<option value="${l.locationUuid}">${escapeHtml(l.name)}</option>`
-          ).join('');
-      } catch (e) {
-        sel.innerHTML = '<option value="">Laden mislukt</option>';
-        showToast('Locaties: ' + e.message, true);
+      body.querySelectorAll('button.row-del').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deletePolledAppointment(btn.dataset.delFhir);
+        });
+      });
+      if (selectedAppointmentFhirId) {
+        selectAppointment(selectedAppointmentFhirId);
       }
     }
 
@@ -527,13 +834,18 @@
         return;
       }
       empty.hidden = true;
-      body.innerHTML = logs.map(l => `<tr>
-        <td>${fmtInstant(l.attemptedAt)}</td>
-        <td><code>${l.appointmentFhirId || '—'}</code></td>
-        <td>${l.status}</td>
-        <td>${l.provider}</td>
-        <td>${l.successful ? 'ja' : 'nee'}</td>
-      </tr>`).join('');
+      body.innerHTML = logs.map(l => {
+        const cls = l.successful ? 'ok' : 'fail';
+        const err = l.errorMessage ? l.errorMessage : '—';
+        return `<tr class="${cls}">
+          <td>${fmtInstant(l.attemptedAt)}</td>
+          <td><code>${esc(l.appointmentFhirId || '—')}</code></td>
+          <td>${esc(l.status)}</td>
+          <td>${esc(l.provider)}</td>
+          <td>${l.successful ? 'ja' : 'nee'}</td>
+          <td>${esc(err)}</td>
+        </tr>`;
+      }).join('');
     }
 
     async function loadAll() {
@@ -543,21 +855,15 @@
           api('/appointments'),
           api('/delivery-logs')
         ]);
-        renderStatus(status);
-        populateProviderSelect(status);
-        lastAppointments = appointments;
-        renderAppointments(appointments);
-        if (selectedId) {
-          const row = appointments.find(a => a.appointmentFhirId === selectedId);
-          selectedCancellable = row && !row.voided;
-          document.getElementById('btn-cancel').disabled = !selectedCancellable;
-          document.getElementById('btn-delete-polled').disabled = !selectedId;
-          document.getElementById('btn-scheduler-one').disabled = !selectedId;
-          if (row?.testMessagingProvider) {
-            document.getElementById('provider-select').value = row.testMessagingProvider;
-          }
-          renderMessageForMode(row);
-        }
+        displayZoneId = status.appointmentDisplayZoneId || status.reminderZoneId || 'Europe/Amsterdam';
+        const zoneLabel = displayZoneId.replace(/_/g, ' ');
+        document.getElementById('appt-start-col').textContent = 'Start (' + zoneLabel + ')';
+        const poll = status.lastPoll;
+        renderSummary(status, poll, appointments.length);
+        renderConfig(status, appointments.length);
+        renderPollDiagnostics(poll);
+        cachedAppointments = appointments;
+        applyAppointmentFilter();
         renderLogs(logs);
       } catch (e) {
         showToast('Laden mislukt: ' + e.message, true);
@@ -568,145 +874,34 @@
     document.getElementById('btn-poll').addEventListener('click', async () => {
       try {
         const r = await api('/poll', { method: 'POST' });
-        showToast(r.message, !r.success);
+        showToast(r.message || 'Poll klaar', !r.success);
         await loadAll();
       } catch (e) { showToast(e.message, true); }
     });
     document.getElementById('btn-scheduler').addEventListener('click', async () => {
       try {
-        const r = await api('/scheduler' + apiQuery(), { method: 'POST' });
-        showToast(`${r.message} — ${r.queued} bericht(en)`, !r.success);
+        const r = await api('/scheduler', { method: 'POST' });
+        showToast(r.message || ('Scheduler: ' + r.queued + ' queued'), !r.success);
         await loadAll();
-      } catch (e) { showToast(e.message, true); }
-    });
-    document.getElementById('btn-scheduler-all').addEventListener('click', async () => {
-      try {
-        const r = await api('/scheduler' + apiQuery('all'), { method: 'POST' });
-        showToast(`${r.message} — ${r.queued} bericht(en)`, !r.success);
-        await loadAll();
-      } catch (e) { showToast(e.message, true); }
-    });
-    document.getElementById('btn-scheduler-one').addEventListener('click', async () => {
-      if (!selectedId) return;
-      try {
-        await saveProviderForSelected();
-        const r = await api(
-          '/appointments/' + encodeURIComponent(selectedId) + '/scheduler' + apiQuery(),
-          { method: 'POST' }
-        );
-        showToast(`${r.message} — ${r.provider}`, !r.success);
-        await loadAll();
-      } catch (e) { showToast(e.message, true); }
-    });
-    function buildAppointmentBody(leadHours) {
-      return {
-        patientUuid: document.getElementById('patient-select').value,
-        locationUuid: document.getElementById('location-select').value,
-        reason: document.getElementById('reason').value,
-        runSyncAfter: document.getElementById('run-sync').checked,
-        runPollAfter: document.getElementById('run-poll').checked,
-        leadHours: leadHours
-      };
-    }
-
-    async function createAppointmentWithLead(leadHours, label) {
-      const patientUuid = document.getElementById('patient-select').value;
-      const locationUuid = document.getElementById('location-select').value;
-      if (!patientUuid) {
-        showToast('Kies eerst een patiënt uit OpenMRS', true);
-        return;
-      }
-      if (!locationUuid) {
-        showToast('Kies eerst een locatie uit OpenMRS', true);
-        return;
-      }
-      try {
-        const r = await api('/appointments' + providerQuery(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildAppointmentBody(leadHours))
-        });
-        document.getElementById('create-result').textContent =
-          `OpenMRS #${r.openmrsAppointmentId} → ${r.appointmentFhirId} om ${fmtInstant(r.appointmentStart)} ` +
-          `(${r.locationName || 'locatie onbekend'}, lead ${leadHours}u). ${r.syncNote || ''} ${r.pollNote || ''}`.trim();
-        selectedId = r.appointmentFhirId;
-        showToast(label + ' (' + getSelectedProvider() + ')', false);
-        await loadAll();
-        if (r.polledRow) {
-          const row = r.polledRow;
-          document.getElementById('provider-select').value = row.testMessagingProvider || getSelectedProvider();
-          renderMessageForMode(row);
-        }
-      } catch (e) { showToast(e.message, true); }
-    }
-
-    document.getElementById('btn-create').addEventListener('click', async () => {
-      const lead = getReminderMode() === '1h' ? 1 : 24;
-      await createAppointmentWithLead(lead, 'Afspraak geboekt');
-    });
-    document.getElementById('btn-create-1h').addEventListener('click', async () => {
-      document.getElementById('reminder-mode').value = '1h';
-      if (lastStatus) renderStatus(lastStatus);
-      await createAppointmentWithLead(1, '1u-afspraak geboekt');
-    });
-    document.getElementById('reminder-mode').addEventListener('change', () => {
-      if (lastStatus) renderStatus(lastStatus);
-      const row = lastAppointments.find(a => a.appointmentFhirId === selectedId);
-      if (row) renderMessageForMode(row);
-    });
-    document.getElementById('btn-cancel').addEventListener('click', async () => {
-      if (!selectedId || !confirm('Afspraak ' + selectedId + ' annuleren in OpenMRS?')) return;
-      try {
-        const r = await api('/appointments/' + encodeURIComponent(selectedId) + '/cancel', { method: 'POST' });
-        showToast(r.message, !r.success);
-        await loadAll();
-      } catch (e) { showToast(e.message, true); }
-    });
-    document.getElementById('btn-delete-polled').addEventListener('click', async () => {
-      if (!selectedId || !confirm('Polled appointment ' + selectedId + ' verwijderen (+ delivery logs)?')) return;
-      try {
-        const r = await api('/polled-appointments/' + encodeURIComponent(selectedId) + '?clearDeliveryLogs=true', { method: 'DELETE' });
-        showToast(r.message, false);
-        selectedId = null;
-        await loadAll();
-      } catch (e) { showToast(e.message, true); }
-    });
-    document.getElementById('btn-clear-logs').addEventListener('click', async () => {
-      if (!selectedId || !confirm('Delivery logs voor ' + selectedId + ' wissen?')) return;
-      try {
-        const msg = await api('/delivery-logs?appointmentFhirId=' + encodeURIComponent(selectedId), { method: 'DELETE' });
-        showToast(msg, false);
-        await loadAll();
-      } catch (e) { showToast(e.message, true); }
-    });
-    document.getElementById('provider-select').addEventListener('change', async () => {
-      if (!selectedId) {
-        showToast('Kies eerst een afspraak om provider op te slaan', true);
-        return;
-      }
-      try {
-        const updated = await saveProviderForSelected();
-        showToast('Provider opgeslagen: ' + getSelectedProvider(), false);
-        const appointments = await api('/appointments');
-        renderAppointments(appointments);
-        selectAppointment(selectedId, appointments);
-        if (updated) renderMessageForMode(updated);
       } catch (e) { showToast(e.message, true); }
     });
     document.getElementById('auto-refresh').addEventListener('change', (e) => {
       if (e.target.checked) startAuto(); else stopAuto();
     });
+    document.getElementById('filter-patient-name').addEventListener('input', applyAppointmentFilter);
+    document.getElementById('btn-delete-polled').addEventListener('click', () => {
+      const id = document.getElementById('btn-delete-polled').dataset.fhirId;
+      deletePolledAppointment(id);
+    });
 
     function startAuto() {
       stopAuto();
-      refreshTimer = setInterval(loadAll, 15000);
+      refreshTimer = setInterval(loadAll, 10000);
     }
     function stopAuto() {
       if (refreshTimer) clearInterval(refreshTimer);
     }
 
-    loadPatients();
-    loadLocations();
     loadAll();
     startAuto();
   </script>

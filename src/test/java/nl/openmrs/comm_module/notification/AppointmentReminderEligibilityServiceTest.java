@@ -35,25 +35,25 @@ class AppointmentReminderEligibilityServiceTest {
     @Test
     void toekomstigeAfspraakMag() {
         PolledAppointmentEntity a = appointment(Instant.parse("2026-05-19T12:00:00Z"), false);
-        assertTrue(eligibilityService.maySend24HourReminder(a));
+        assertTrue(eligibilityService.maySendReminder(a));
     }
 
     @Test
     void afspraakNetVoorNuMagNog() {
         PolledAppointmentEntity a = appointment(Instant.parse("2026-05-18T11:59:00Z"), false);
-        assertTrue(eligibilityService.maySend24HourReminder(a));
+        assertTrue(eligibilityService.maySendReminder(a));
     }
 
     @Test
     void begonnenAfspraakMagNiet() {
         PolledAppointmentEntity a = appointment(NOW, false);
-        assertFalse(eligibilityService.maySend24HourReminder(a));
+        assertFalse(eligibilityService.maySendReminder(a));
     }
 
     @Test
     void geannuleerdeAfspraakMagNiet() {
         PolledAppointmentEntity a = appointment(Instant.parse("2026-05-19T12:00:00Z"), true);
-        assertFalse(eligibilityService.maySend24HourReminder(a));
+        assertFalse(eligibilityService.maySendReminder(a));
     }
 
     private static PolledAppointmentEntity appointment(Instant start, boolean voided) {

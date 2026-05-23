@@ -7,6 +7,7 @@ import nl.openmrs.comm_module.organisation.dto.OrganisationProviderConfigRespons
 import nl.openmrs.comm_module.persistence.dao.OrganisationConfigRepository;
 import nl.openmrs.comm_module.persistence.entity.OrganisationConfigEntity;
 import nl.openmrs.comm_module.persistence.entity.OrganisationProviderConfigEntity;
+import nl.openmrs.comm_module.provider.MessagingProviderType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import nl.openmrs.comm_module.common.encryption.PgCryptoService;
@@ -106,5 +107,26 @@ public class OrganisationConfigService {
                         provider.getEncryptedCredentials() != null && !provider.getEncryptedCredentials().isBlank()
                 ))
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public String getDecryptedCredentials(String organisationId, MessagingProviderType providerType) {
+        OrganisationConfigEntity entity = organisationConfigRepository
+                .findByOrganisationId(organisationId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Organisation config not found: " + organisationId
+                ));
+
+        OrganisationProviderConfigEntity provider = entity.getProviders()
+                .stream()
+                .filter(OrganisationProviderConfigEntity::isEnabled)
+                .filter(p -> p.getProviderType() == providerType)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "No enabled provider config found for provider " + providerType
+                                + " in organisation " + organisationId
+                ));
+
+        return pgCryptoService.decrypt(provider.getEncryptedCredentials());
     }
 }

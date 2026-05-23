@@ -50,6 +50,35 @@ public class NotificationDeliveryLogService {
         return repository.existsByAppointmentFhirIdAndMessageTypeAndSuccessfulTrue(appointmentFhirId, messageType);
     }
 
+    public boolean hasAnySuccessfulDelivery(String appointmentFhirId) {
+        if (appointmentFhirId == null || appointmentFhirId.isBlank()) {
+            return false;
+        }
+        return repository.existsByAppointmentFhirIdAndSuccessfulTrue(appointmentFhirId);
+    }
+
+    /** US-017: consumer mag alleen versturen zolang de QUEUED-regel nog bestaat (niet geannuleerd). */
+    public boolean hasQueuedDeliveryRecord(java.util.UUID notificationId) {
+        if (notificationId == null) {
+            return true;
+        }
+        return repository.existsByNotificationIdAndStatus(notificationId, STATUS_QUEUED);
+    }
+
+    /** US-017: verwijder QUEUED-regels zodat geannuleerde afspraken niet meer verstuurd worden. */
+    @Transactional
+    public int cancelQueuedNotifications(String appointmentFhirId) {
+        if (appointmentFhirId == null || appointmentFhirId.isBlank()) {
+            return 0;
+        }
+        var queued = repository.findByAppointmentFhirIdAndStatus(appointmentFhirId, STATUS_QUEUED);
+        if (queued.isEmpty()) {
+            return 0;
+        }
+        repository.deleteAll(queued);
+        return queued.size();
+    }
+
     private void persist(
             NotificationQueueMessage message,
             String status,
