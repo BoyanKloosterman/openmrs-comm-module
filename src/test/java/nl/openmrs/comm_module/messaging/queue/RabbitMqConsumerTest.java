@@ -2,6 +2,7 @@ package nl.openmrs.comm_module.messaging.queue;
 
 import nl.openmrs.comm_module.config.OpenmrsFhirProperties;
 import nl.openmrs.comm_module.messaging.queue.dto.NotificationQueueMessage;
+import nl.openmrs.comm_module.message_log.MessageLogService;
 import nl.openmrs.comm_module.notification.NotificationDeliveryLogService;
 import nl.openmrs.comm_module.organisation.service.OrganisationConfigService;
 import nl.openmrs.comm_module.poll.persistence.PolledAppointmentEntity;
@@ -46,6 +47,9 @@ class RabbitMqConsumerTest {
     private NotificationDeliveryLogService deliveryLogService;
 
     @Mock
+    private MessageLogService messageLogService;
+
+    @Mock
     private RabbitMqProducer rabbitMqProducer;
 
     @Mock
@@ -67,6 +71,7 @@ class RabbitMqConsumerTest {
                 new RabbitMqConsumer(
                         providerFactory,
                         deliveryLogService,
+                        messageLogService,
                         rabbitMqProducer,
                         polledAppointmentRepository,
                         fhirProperties,
@@ -89,6 +94,7 @@ class RabbitMqConsumerTest {
 
         verify(messagingProvider).sendMessage(message, CREDENTIALS_JSON);
         verify(deliveryLogService).recordProviderAttempt(message, result);
+        verify(messageLogService).recordProviderAttempt(message, result);
         verify(rabbitMqProducer, never()).publishRetry(message);
     }
 
@@ -106,6 +112,7 @@ class RabbitMqConsumerTest {
         consumer.consume(message);
 
         verify(deliveryLogService).recordProviderAttempt(message, result);
+        verify(messageLogService).recordProviderAttempt(message, result);
         verify(rabbitMqProducer).publishRetry(message);
     }
 
@@ -183,6 +190,15 @@ class RabbitMqConsumerTest {
         NotificationQueueMessage message = new NotificationQueueMessage();
         message.setNotificationId(UUID.randomUUID());
         message.setProvider(MessagingProviderType.SWIFTSEND);
+        message.setRetryCount(MAX_ATTEMPTS);
+        ProviderSendResult result = ProviderSendResult.failed("timeout");
+
+        when(providerFactory.getProvider(MessagingProviderType.SWIFTSEND)).thenReturn(messagingProvider);
+        when(messagingProvider.sendMessage(message, CREDENTIALS_JSON)).thenReturn(result);
+
+        assertThrows(AmqpRejectAndDontRequeueException.class, () -> consumer.consume(message));
+        verify(messageLogService).recordProviderAttempt(message, result);
+        verify(rabbitMqProducer, never()).publishRetry(message);
         message.setOrganisationId(ORGANISATION_ID);
         return message;
     }
