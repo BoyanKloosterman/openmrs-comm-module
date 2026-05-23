@@ -2,26 +2,14 @@ package nl.openmrs.comm_module.testgui.dto;
 
 import java.time.Instant;
 
+/** Lijstrijen voor test-scheduling.html (alleen velden die de tabel toont). */
 public record PolledAppointmentViewDto(
         String appointmentFhirId,
-        Integer openmrsAppointmentId,
-        boolean cancellableInOpenmrs,
-        String patientFhirId,
         Instant appointmentDatetime,
         String patientDisplayName,
         String patientPhoneMasked,
-        String location,
-        String appointmentType,
-        String appointmentReason,
         boolean voided,
-        Instant lastPolledAt,
         AppointmentWindowStatus windowStatus,
-        boolean inReminderWindow,
         boolean alreadySentSuccessfully,
         AppointmentWindowStatus oneHourWindowStatus,
-        boolean inOneHourReminderWindow,
-        boolean alreadySentOneHourSuccessfully,
-        String testMessagingProvider,
-        String lastDeliveryProvider,
-        MessagePreviewDto messagePreview,
-        MessagePreviewDto oneHourMessagePreview) {}
+        boolean alreadySentOneHourSuccessfully) {}

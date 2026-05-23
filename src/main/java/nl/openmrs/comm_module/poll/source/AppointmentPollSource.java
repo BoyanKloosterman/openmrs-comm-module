@@ -8,5 +8,5 @@ import java.util.List;
 /** Haalt afspraken + patiënt op (OCP: andere bron = nieuwe implementatie). */
 public interface AppointmentPollSource {
 
-    List<AppointmentWithPatientDto> fetchBetween(Instant from, Instant to);
+    List<AppointmentWithPatientDto> fetchBetween(String organisationId, Instant from, Instant to);
 }

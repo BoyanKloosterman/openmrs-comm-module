@@ -6,9 +6,11 @@ import org.hl7.fhir.r5.model.Appointment;
 import org.hl7.fhir.r5.model.CodeableConcept;
 import org.hl7.fhir.r5.model.CodeableReference;
 import org.hl7.fhir.r5.model.ContactPoint;
+import org.hl7.fhir.r5.model.Enumerations;
 import org.hl7.fhir.r5.model.HumanName;
 import org.hl7.fhir.r5.model.Patient;
 import org.hl7.fhir.r5.model.Reference;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -18,12 +20,14 @@ import java.util.Date;
 
 /** Bouwt FHIR R5 Patient/Appointment uit OpenMRS scheduling-rijen. */
 @Component
+@ConditionalOnProperty(name = "openmrs.scheduling.sync.enabled", havingValue = "true")
 public class OpenmrsFhirResourceFactory {
 
     public Patient buildPatient(
             OpenmrsSchedulingAppointmentRow row, OpenmrsSchedulingSyncProperties properties) {
         Patient patient = new Patient();
-        patient.setId(row.fhirPatientId());
+        // OpenMRS FHIR2: Patient-id = OpenMRS patient-uuid
+        patient.setId(row.patientUuid());
 
         HumanName name = new HumanName();
         if (row.givenName() != null && !row.givenName().isBlank()) {
@@ -32,23 +36,34 @@ public class OpenmrsFhirResourceFactory {
         if (row.familyName() != null && !row.familyName().isBlank()) {
             name.setFamily(row.familyName().trim());
         }
+        if (!name.hasGiven() && !name.hasFamily()) {
+            name.setFamily("Onbekend");
+        }
         patient.addName(name);
 
+        // US-009: gender of birthDate verplicht; OpenMRS JDBC levert geen gender → unknown
+        patient.setGender(Enumerations.AdministrativeGender.UNKNOWN);
+
         String phone = resolvePhone(row, properties);
-        if (phone != null) {
-            patient.addTelecom(
-                    new ContactPoint()
-                            .setSystem(ContactPoint.ContactPointSystem.PHONE)
-                            .setValue(phone));
+        if (phone == null || phone.isBlank()) {
+            throw new IllegalStateException(
+                    "Patient "
+                            + row.patientUuid()
+                            + " heeft geen telefoonnummer; stel OPENMRS_SCHEDULING_SYNC_FALLBACK_PHONE in");
         }
+        patient.addTelecom(
+                new ContactPoint()
+                        .setSystem(ContactPoint.ContactPointSystem.PHONE)
+                        .setValue(phone));
         return patient;
     }
 
     public Appointment buildAppointment(
             OpenmrsSchedulingAppointmentRow row, OpenmrsSchedulingSyncProperties properties) {
-        ZoneId zone = ZoneId.of(properties.getZoneId());
-        Instant start = toInstant(row.startDate(), zone);
-        Instant end = toInstant(row.endDate(), zone);
+        // Zelfde zone als JDBC-poll: naive start_date_time in MariaDB (meestal UTC bij SPA).
+        ZoneId dbZone = properties.effectiveDbZoneId();
+        Instant start = toInstant(row.startDate(), dbZone);
+        Instant end = toInstant(row.endDate(), dbZone);
 
         Appointment appointment = new Appointment();
         appointment.setId(row.fhirAppointmentId());
@@ -58,7 +73,7 @@ public class OpenmrsFhirResourceFactory {
             appointment.setEnd(Date.from(end));
         }
 
-        appointment.setSubject(new Reference("Patient/" + row.fhirPatientId()));
+        appointment.setSubject(new Reference("Patient/" + row.patientUuid()));
 
         if (row.appointmentTypeName() != null && !row.appointmentTypeName().isBlank()) {
             appointment.addServiceType(new CodeableReference(new CodeableConcept().setText(row.appointmentTypeName())));
@@ -68,7 +83,7 @@ public class OpenmrsFhirResourceFactory {
 
         Appointment.AppointmentParticipantComponent patientParticipant =
                 new Appointment.AppointmentParticipantComponent();
-        patientParticipant.setActor(new Reference("Patient/" + row.fhirPatientId()));
+        patientParticipant.setActor(new Reference("Patient/" + row.patientUuid()));
         patientParticipant.setStatus(Appointment.ParticipationStatus.ACCEPTED);
         appointment.addParticipant(patientParticipant);
 
