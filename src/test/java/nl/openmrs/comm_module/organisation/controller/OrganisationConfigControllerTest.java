@@ -47,6 +47,7 @@ class OrganisationConfigControllerTest {
                 {
                   "organisationId": "openmrs-demo",
                   "active": true,
+                  "timezone": "Europe/Amsterdam",
                   "providers": [
                     {
                       "providerType": "SWIFTSEND",
@@ -64,6 +65,7 @@ class OrganisationConfigControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.organisationId").value("openmrs-demo"))
                 .andExpect(jsonPath("$.active").value(true))
+                .andExpect(jsonPath("$.timezone").value("Europe/Amsterdam"))
                 .andExpect(jsonPath("$.providers[0].providerType").value("SWIFTSEND"))
                 .andExpect(jsonPath("$.providers[0].enabled").value(true))
                 .andExpect(jsonPath("$.providers[0].priority").value(1))
@@ -78,6 +80,8 @@ class OrganisationConfigControllerTest {
         mockMvc.perform(get("/api/organisations/config/openmrs-demo"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.organisationId").value("openmrs-demo"))
+                .andExpect(jsonPath("$.active").value(true))
+                .andExpect(jsonPath("$.timezone").value("Europe/Amsterdam"))
                 .andExpect(jsonPath("$.providers[0].providerType").value("SWIFTSEND"));
     }
 
@@ -107,6 +111,7 @@ class OrganisationConfigControllerTest {
                 UUID.randomUUID(),
                 "openmrs-demo",
                 true,
+                "Europe/Amsterdam",
                 List.of(
                         new OrganisationProviderConfigResponse(
                                 UUID.randomUUID(),
