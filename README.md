@@ -18,7 +18,7 @@ Doelgroep van deze documentatie: **technisch beheerders** van een OpenMRS-organi
 1. [Architectuur en datastroom](#architectuur-en-datastroom)
 2. [Koppeling in productie (beheerders)](#koppeling-in-productie-beheerders)
 3. [Snel starten met Docker](#snel-starten-met-docker)
-4. [Voorbeeldrequest (oplossing in werking)](#voorbeeldrequest-oplossing-in-werking)
+4. [Voorbeeldrequests (oplossing in werking)](#voorbeeldrequests-oplossing-in-werking)
 5. [Poorten en onderdelen in Compose](#poorten-en-onderdelen-in-compose)
 6. [Optioneel: alleen infra in Docker, app op de host](#optioneel-alleen-infra-in-docker-app-op-de-host)
 7. [Build en tests](#build-en-tests)
@@ -231,7 +231,7 @@ Volumes behouden comm-module-data. Volledige reset: `docker compose down -v`.
 
 ---
 
-## Voorbeeldrequest (oplossing in werking)
+## Voorbeeldrequests (oplossing in werking)
 
 ### 1. Snelle smoke test — bericht op RabbitMQ
 
@@ -267,7 +267,57 @@ Controle in RabbitMQ Management (queue `queue.swiftsend` e.d.) of in de logs van
 docker compose logs -f comm-module
 ```
 
-### 2. Volledige keten — afspraakherinnering (scheduling)
+### 2. FHIR-bericht — ACK/NACK (US-010)
+
+Stuur een FHIR R5 `Bundle` naar de comm-module. Bij een geldig bericht volgt **HTTP 200** met een `OperationOutcome` (ACK); bij validatie-, parse- of verwerkingsfouten **HTTP 400** met NACK.
+
+**Linux / macOS / Git Bash** (vervang `bundle.json` door uw FHIR Bundle):
+
+```bash
+curl -sS -X POST "http://localhost:8081/api/fhir/messages" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d @bundle.json
+```
+
+**Windows PowerShell** (inline voorbeeld met minimale transaction-bundle):
+
+```powershell
+$body = @'
+{
+  "resourceType": "Bundle",
+  "id": "msg-demo-001",
+  "type": "transaction",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "pat-001",
+        "name": [{ "family": "Jansen", "given": ["Jan"] }],
+        "gender": "male",
+        "telecom": [{ "system": "phone", "value": "+31612345678" }]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Appointment",
+        "id": "apt-001",
+        "start": "2026-05-23T10:00:00+02:00",
+        "subject": { "reference": "Patient/pat-001" }
+      }
+    }
+  ]
+}
+'@
+Invoke-RestMethod -Method Post -Uri "http://localhost:8081/api/fhir/messages" `
+  -ContentType "application/json" -Body $body
+```
+
+**Verwacht bij succes (HTTP 200):** `resourceType` = `OperationOutcome`, `issue[0].severity` = `information`, diagnostics bevat het message ID.
+
+**Verwacht bij fout (HTTP 400):** `OperationOutcome` met `issue[0].severity` = `error` (validatie, parse of verwerking).
+
+### 3. Volledige keten — afspraakherinnering (scheduling)
 
 Voor de end-to-end flow (distro-afspraak → FHIR poll → scheduler → delivery log) gebruikt u de logmonitor of het stappenplan:
 
@@ -353,6 +403,7 @@ Rapportage (Sprint 3): [TESTRAPPORTAGE.md](TESTRAPPORTAGE.md) (**146** tests, ke
 | [TESTRAPPORTAGE.md](TESTRAPPORTAGE.md) | Unit- en integratietests (scheduler, providers, idempotentie) |
 | [PERFORMANCERAPPORTAGE.md](PERFORMANCERAPPORTAGE.md) | Throughput, latency en betrouwbaarheid onder belasting |
 | [docs/docker-scheduling-test.md](docs/docker-scheduling-test.md) | End-to-end scheduling in Docker |
+| [docs/fhir-validatie-beheerders.md](docs/fhir-validatie-beheerders.md) | FHIR R5-validatieregels (US-009) voor beheerders |
 | [docs/ADR-3-hoe-koppelen-we-aan-openmrs.md](docs/ADR-3-hoe-koppelen-we-aan-openmrs.md) | FHIR polling, scenario’s bij uitval |
 | [docs/ADR-1-zelfstandige-module-of-ingebouwde-module.md](docs/ADR-1-zelfstandige-module-of-ingebouwde-module.md) | Zelfstandige module vs. embedded |
 | [docs/bijlage-niet-functionele-eisen.md](docs/bijlage-niet-functionele-eisen.md) | Niet-functionele eisen |
