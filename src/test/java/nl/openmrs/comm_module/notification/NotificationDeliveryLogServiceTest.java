@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +28,10 @@ import static org.mockito.Mockito.when;
 
 @SpringBootTest
 @Transactional
+@TestPropertySource(
+        properties = {
+            "spring.datasource.url=jdbc:h2:mem:notification_delivery_log_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE"
+        })
 class NotificationDeliveryLogServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-05-18T12:00:00Z");

@@ -207,15 +207,7 @@ class RabbitMqConsumerTest {
         NotificationQueueMessage message = new NotificationQueueMessage();
         message.setNotificationId(UUID.randomUUID());
         message.setProvider(MessagingProviderType.SWIFTSEND);
-        message.setRetryCount(MAX_ATTEMPTS);
-        ProviderSendResult result = ProviderSendResult.failed("timeout");
-
-        when(providerFactory.getProvider(MessagingProviderType.SWIFTSEND)).thenReturn(messagingProvider);
-        when(messagingProvider.sendMessage(message, CREDENTIALS_JSON)).thenReturn(result);
-
-        assertThrows(AmqpRejectAndDontRequeueException.class, () -> consumer.consume(message));
-        verify(messageLogService).recordProviderAttempt(message, result);
-        verify(rabbitMqProducer, never()).publishRetry(message);
+        message.setRetryCount(0);
         message.setOrganisationId(ORGANISATION_ID);
         return message;
     }
