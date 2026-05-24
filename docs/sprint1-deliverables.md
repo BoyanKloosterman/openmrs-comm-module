@@ -27,6 +27,8 @@ OpenMRS is een open-source patiëntendossier systeem. Ziekenhuizen en klinieken 
 | 1 | Zelfstandige module of ingebouwde module? | [ADR-1-zelfstandige-module-of-ingebouwde-module.md](ADR-1-zelfstandige-module-of-ingebouwde-module.md) |
 | 2 | Welke technologie gebruiken we? | [ADR-2-welke-technologie-gebruiken-we.md](ADR-2-welke-technologie-gebruiken-we.md) |
 | 3 | Hoe koppelen we aan OpenMRS? | [ADR-3-hoe-koppelen-we-aan-openmrs.md](ADR-3-hoe-koppelen-we-aan-openmrs.md) |
+| 4 | RabbitMQ queues | [ADR-4-rabbit-mq-queues.md](ADR-4-rabbit-mq-queues.md) |
+| 5 | Observability | [ADR-5-observability.md](ADR-5-observability.md) |
 
 ---
 
