@@ -405,6 +405,8 @@ Rapportage (finale versie): [TESTRAPPORTAGE.md](TESTRAPPORTAGE.md) (**269** test
 | [docs/docker-scheduling-test.md](docs/docker-scheduling-test.md) | End-to-end scheduling in Docker |
 | [docs/fhir-validatie-beheerders.md](docs/fhir-validatie-beheerders.md) | FHIR R5-validatieregels (US-009) voor beheerders |
 | [docs/ADR-3-hoe-koppelen-we-aan-openmrs.md](docs/ADR-3-hoe-koppelen-we-aan-openmrs.md) | FHIR polling, scenario’s bij uitval |
+| [docs/ADR-4-rabbit-mq-queues.md](docs/ADR-4-rabbit-mq-queues.md) | Queues, retries, dead letter queues |
+| [docs/ADR-5-observability.md](docs/ADR-5-observability.md) | Metrics, traces, Grafana-dashboard |
 | [docs/ADR-1-zelfstandige-module-of-ingebouwde-module.md](docs/ADR-1-zelfstandige-module-of-ingebouwde-module.md) | Zelfstandige module vs. embedded |
 | [docs/bijlage-niet-functionele-eisen.md](docs/bijlage-niet-functionele-eisen.md) | Niet-functionele eisen |
 
