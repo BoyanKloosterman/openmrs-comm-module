@@ -1,0 +1,52 @@
+name: CI - Automatische Tests
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+      - 'main'
+      - 'develop'
+  pull_request:
+    branches:
+      - 'main'
+      - 'develop'
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Unit Tests
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run unit tests
+        run: mvn clean test
+
+      - name: Test Report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Maven Test Results
+          path: '**/target/surefire-reports/*.xml'
+          reporter: 'java-junit'
+          fail-on-error: true
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: '**/target/surefire-reports/'
